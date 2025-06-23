@@ -104,19 +104,11 @@ class OSInteraction:
                 if not actual_filepath.endswith((".txt", ".md", ".rtf")): # basic text-based doc types
                     actual_filepath += ".txt"
                 self.logger.info(f"Creating document (as text file): {actual_filepath}")
-                # Future: use python-docx or similar for real .docx files.
-                # from docx import Document
-                # document = Document()
-                # document.add_paragraph(content)
-                # document.save(actual_filepath)
             elif file_type == "spreadsheet":
                 # For now, create as .csv if content is suitable, or .txt
                 if not actual_filepath.endswith((".csv", ".tsv")):
                     actual_filepath += ".csv"
                 self.logger.info(f"Creating spreadsheet (as CSV): {actual_filepath}")
-                # Future: use openpyxl or similar for real .xlsx files.
-                # For CSV, content should ideally be structured (e.g., comma-separated strings)
-                # For simplicity, just writing raw content.
             else: # Default to text file (.txt)
                 if "." not in os.path.basename(actual_filepath): # Add .txt if no extension
                     actual_filepath += ".txt"
@@ -130,8 +122,41 @@ class OSInteraction:
                 message += f" (requested as {filepath})"
             self.logger.info(message)
             return True, message
+        except PermissionError as pe:
+            message = f"Permission denied when trying to create file {filepath} (type: {file_type}): {pe}. Please try a different location."
+            self.logger.error(message)
+            return False, message
         except Exception as e:
             message = f"Error creating file {filepath} (type: {file_type}): {e}"
+            self.logger.error(message)
+            return False, message
+
+    def read_file_content(self, filepath: str) -> tuple[bool, str]:
+        """Reads the content of a file."""
+        self.logger.info(f"Attempting to read file: {filepath}")
+        try:
+            if not os.path.isfile(filepath):
+                message = f"Error: File not found at {filepath}"
+                self.logger.warning(message)
+                return False, message
+
+            # Expand user path just in case it wasn't done before, though typically it should be.
+            filepath = os.path.expanduser(filepath)
+
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            self.logger.info(f"Successfully read file: {filepath}")
+            return True, content
+        except FileNotFoundError: # Double check after expanduser, though os.path.isfile should catch it.
+            message = f"Error: File not found at the expanded path {filepath}"
+            self.logger.error(message)
+            return False, message
+        except PermissionError as pe:
+            message = f"Permission denied when trying to read file {filepath}: {pe}."
+            self.logger.error(message)
+            return False, message
+        except Exception as e:
+            message = f"Error reading file {filepath}: {e}"
             self.logger.error(message)
             return False, message
 
@@ -152,14 +177,8 @@ class OSInteraction:
                     # Using list form for powershell is generally safer
                     process = subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True, text=True, check=True, timeout=30)
                 else: # Default to CMD
-                    # For CMD, shell=True is often used but ensure command is sanitized if coming from LLM directly
-                    # A safer way for specific commands is to not use shell=True and pass command and args as a list
                     process = subprocess.run(command, capture_output=True, text=True, check=True, shell=True, timeout=30)
             else: # POSIX (Linux/macOS)
-                # shell=True can be a security hazard if command is constructed from external input.
-                # If shell_type is 'bash' or 'sh', it implies shell features are needed.
-                # For simple commands, shell=False and passing command as list is safer.
-                # Given the project's nature, we might receive complex shell commands.
                 if shell_type.lower() in ["bash", "sh", "zsh", "powershell"]: # powershell can be on linux too
                      process = subprocess.run([shell_type, "-c", command], capture_output=True, text=True, check=True, timeout=30)
                 else: # Treat as a direct command if shell_type is not a known shell
@@ -238,10 +257,8 @@ class OSInteraction:
                 self.logger.error(message)
                 return False, message
         elif os.name == 'posix': # Linux/macOS
-            # Linux: using amixer (alsa-utils)
             if shutil.which("amixer"):
                 try:
-                    # Example: amixer sset Master 50%
                     command = ["amixer", "-q", "sset", "Master", f"{int(level*100)}%"]
                     subprocess.run(command, check=True)
                     message = f"Volume set to {level*100:.0f}% on Linux using amixer."
@@ -251,10 +268,8 @@ class OSInteraction:
                     message = f"Error setting volume on Linux using amixer: {e}"
                     self.logger.error(message)
                     return False, message
-            # macOS: using osascript
             elif hasattr(os, 'uname') and os.uname().sysname == 'Darwin':
                 try:
-                    # Convert 0.0-1.0 to 0-100 for osascript
                     mac_volume = int(level * 100)
                     script = f"set volume output volume {mac_volume}"
                     subprocess.run(["osascript", "-e", script], check=True)
@@ -278,66 +293,70 @@ if __name__ == '__main__':
     from jarvis_assistant.utils.logger import get_logger # Relative import for testing
     logger = get_logger("OSInteractionTest") # Initialize logger for the test scope
     os_interaction = OSInteraction()
-    os_interaction.logger = logger # Assign the test logger
+    os_interaction.logger = logger
 
     # Test directory creation
-    test_dir = "test_jarvis_os_dir"
-    success, msg = os_interaction.create_directory(test_dir)
-    logger.info(f"Create directory '{test_dir}': {success} - {msg}")
-    if success:
-        assert os.path.isdir(test_dir)
+    test_dir = os.path.join(os.path.expanduser("~"), "test_jarvis_os_dir_home") # Test in home
+    os_interaction.create_directory(test_dir) # Create first for file tests
 
     # Test file creation
     test_file_path = os.path.join(test_dir, "test_os_interaction.txt")
-    success, msg = os_interaction.create_text_file(test_file_path, "Hello from OSInteraction module!")
+    success, msg = os_interaction.create_file(test_file_path, "Hello from OSInteraction module!\nThis is a test file.")
     logger.info(f"Create file '{test_file_path}': {success} - {msg}")
     if success:
         assert os.path.isfile(test_file_path)
 
+    # Test read file content
+    if success: # Only if file creation was successful
+        read_success, content = os_interaction.read_file_content(test_file_path)
+        logger.info(f"Read file '{test_file_path}': {read_success} - Content: '{content[:50]}...'")
+        assert read_success
+        assert "Hello from OSInteraction module!" in content
+
     # Test list directory
-    success, contents = os_interaction.list_directory_contents(test_dir)
-    logger.info(f"List directory '{test_dir}': {success} - {contents}")
-    if success and isinstance(contents, list):
+    success_list, contents = os_interaction.list_directory_contents(test_dir)
+    logger.info(f"List directory '{test_dir}': {success_list} - {contents}")
+    if success_list and isinstance(contents, list):
         assert "test_os_interaction.txt" in contents
 
     # Test move file
     moved_file_path = os.path.join(test_dir, "moved_test_file.txt")
-    success, msg = os_interaction.move_path(test_file_path, moved_file_path)
-    logger.info(f"Move file: {success} - {msg}")
-    if success:
+    success_move, msg_move = os_interaction.move_path(test_file_path, moved_file_path)
+    logger.info(f"Move file: {success_move} - {msg_move}")
+    if success_move:
         assert not os.path.exists(test_file_path)
         assert os.path.isfile(moved_file_path)
-        test_file_path = moved_file_path # Update for subsequent deletion
+        test_file_path = moved_file_path
 
     # Test delete file
-    success, msg = os_interaction.delete_path(test_file_path)
-    logger.info(f"Delete file '{test_file_path}': {success} - {msg}")
-    if success:
+    success_del_file, msg_del_file = os_interaction.delete_path(test_file_path)
+    logger.info(f"Delete file '{test_file_path}': {success_del_file} - {msg_del_file}")
+    if success_del_file:
         assert not os.path.exists(test_file_path)
 
-    # Test delete directory
-    success, msg = os_interaction.delete_path(test_dir)
-    logger.info(f"Delete directory '{test_dir}': {success} - {msg}")
-    if success:
-        assert not os.path.exists(test_dir)
+    # Test delete directory (cleanup)
+    if os.path.exists(test_dir): # Ensure it exists before trying to delete
+        success_del_dir, msg_del_dir = os_interaction.delete_path(test_dir)
+        logger.info(f"Delete directory '{test_dir}': {success_del_dir} - {msg_del_dir}")
+        if success_del_dir:
+            assert not os.path.exists(test_dir)
+    else:
+        logger.info(f"Test directory '{test_dir}' already deleted or was not created.")
 
-    # Test command execution
+
     logger.info("\nTesting CMD/Shell command (e.g., 'echo Hello World'):")
-    # Using a simple echo command for cross-platform compatibility in testing.
-    # Actual commands like ipconfig or Get-Process are harder to assert consistently in a generic test.
     cmd_to_run = "echo Hello Jarvis Assistant"
-    shell = "cmd" if os.name == 'nt' else "sh" # Use 'sh' for POSIX, 'cmd' for Windows
-    success, output = os_interaction.execute_command(cmd_to_run, shell_type=shell)
-    logger.info(f"Execute command '{cmd_to_run}' via '{shell}': {success}\nOutput: {output}")
-    assert success
-    assert "Hello Jarvis Assistant" in output
+    shell = "cmd" if os.name == 'nt' else "sh"
+    success_cmd, output_cmd = os_interaction.execute_command(cmd_to_run, shell_type=shell)
+    logger.info(f"Execute command '{cmd_to_run}' via '{shell}': {success_cmd}\nOutput: {output_cmd}")
+    assert success_cmd
+    assert "Hello Jarvis Assistant" in output_cmd
 
-    # Test settings (actual hardware interaction might not occur in sandbox)
     logger.info("\nTesting system settings (brightness/volume):")
-    success, msg = os_interaction.set_brightness(75)
-    logger.info(f"Set brightness: {success} - {msg}")
+    success_bright, msg_bright = os_interaction.set_brightness(75)
+    logger.info(f"Set brightness: {success_bright} - {msg_bright}")
 
-    success, msg = os_interaction.set_volume(0.5)
-    logger.info(f"Set volume: {success} - {msg}")
+    success_vol, msg_vol = os_interaction.set_volume(0.5)
+    logger.info(f"Set volume: {success_vol} - {msg_vol}")
 
     logger.info("OSInteraction tests complete.")

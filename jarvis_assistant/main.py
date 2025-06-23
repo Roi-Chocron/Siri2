@@ -23,10 +23,94 @@ def handle_os_interaction(os_agent: OSInteraction, intent: str, entities: dict) 
         content = entities.get("content", "")
         file_type = entities.get("file_type", "txt") # Default to txt
         if filepath:
-            # Make paths relative to user's home directory if not absolute
-            if not os.path.isabs(filepath):
-                filepath = os.path.expanduser(os.path.join("~", filepath))
-            success, response_message = os_agent.create_file(filepath, content, file_type)
+            # Check for attempts to write to root of a drive (e.g., C:\file.txt)
+            # os.path.dirname("C:/file.txt") -> C:/
+            # os.path.abspath(os.sep) gives the root of the current drive, e.g. C:\
+            # A more direct check for "C:/file.txt" style paths:
+            path_obj = os.path.normpath(filepath) # Normalize (e.g. C:/file.txt -> C:\file.txt on Win)
+            # Check if the parent directory is the root directory.
+            # Example: dirname of 'C:\file.txt' is 'C:\'. For 'file.txt' it's ''.
+            # If os.path.dirname(path_obj) is 'C:\\' (Windows) or '/' (POSIX)
+            # This check is a bit simplistic, as user might not have typed C:/ but C:file.txt
+            # A better check is if the path starts with "X:\" or "X:/" and has no further subdirs for the file itself.
+
+            # Let's refine the check for root directory paths.
+            # A common problematic pattern is "C:/file.txt" or "/file.txt"
+            # os.path.splitdrive("C:/file.txt") -> ('C:', '/file.txt')
+            # os.path.splitdrive("/file.txt") -> ('', '/file.txt')
+            drive, tail = os.path.splitdrive(path_obj)
+            is_root_path_attempt = False
+            if drive and tail.startswith(os.sep) and len(tail.strip(os.sep).split(os.sep)) == 1:
+                 # e.g. C:\file.txt -> drive='C:', tail='\file.txt'
+                 # tail.strip(os.sep) -> 'file.txt'
+                 # tail.strip(os.sep).split(os.sep) -> ['file.txt']
+                 is_root_path_attempt = True
+            elif not drive and path_obj.startswith(os.sep) and len(path_obj.strip(os.sep).split(os.sep)) == 1:
+                # e.g. /file.txt (POSIX)
+                is_root_path_attempt = True
+
+            if is_root_path_attempt:
+                response_message = (
+                    f"Creating files directly in the root directory ('{os.path.dirname(path_obj)}') "
+                    "is often restricted. Please try specifying a path within your user folders "
+                    "(e.g., 'Documents/my_file.txt' or 'my_file.txt' to save in your home directory)."
+                )
+                # No 'success = False' here, as os_agent.create_file isn't called yet.
+            else:
+                # Make paths relative to user's home directory if not absolute
+                # This logic should only apply if the path is NOT already absolute.
+                # The LLM might provide an absolute path like "C:\Users\user\Documents\file.txt"
+                # or a relative one like "my_folder/file.txt".
+                # If it's like "C:/file.txt", the above check should catch it.
+                # If it's like "jarvis_assistant/ttt.txt" as in the log, this should be handled.
+
+                # Original logic for expanding path:
+                # if not os.path.isabs(filepath):
+                #    filepath = os.path.expanduser(os.path.join("~", filepath))
+                # This assumes that a non-absolute path given by the LLM should always be relative to home.
+                # This seems reasonable. Let's ensure the original filepath is used for the is_root_path_attempt check.
+
+                # Re-evaluate path expansion:
+                # If `filepath` from LLM is like "C:/some/path/file.txt", it's absolute.
+                # If `filepath` is "my_docs/file.txt", it's relative.
+                # The `os.path.expanduser(os.path.join("~", filepath))` is good for relative paths.
+
+                # Use the original filepath from entities for the root check, then expand if not absolute.
+                processed_filepath = filepath
+                if not os.path.isabs(processed_filepath):
+                    # This will turn "file.txt" into "/Users/username/file.txt"
+                    # or "myfolder/file.txt" into "/Users/username/myfolder/file.txt"
+                    processed_filepath = os.path.expanduser(os.path.join("~", processed_filepath))
+
+                # Now, `processed_filepath` is absolute.
+                # The root check should have been done on the `filepath` as provided by LLM if it was intended as absolute.
+                # Or, if the LLM gave "C:/file.txt", `is_root_path_attempt` above handles it.
+                # If LLM gave "file.txt", it becomes "~/file.txt", which is fine.
+
+                # The issue arises if LLM gives "C:/file.txt", and we *don't* expand it to home.
+                # So, the `is_root_path_attempt` should be on the `filepath` *before* home expansion if it's absolute.
+                # And if it's relative, it will be expanded to home, which is usually safe.
+
+                # Let's simplify: if the original filepath from LLM is absolute AND is a root path, warn.
+                # Otherwise, if relative, expand to home. If absolute and not root, use as is.
+
+                final_filepath_to_use = filepath
+                if os.path.isabs(filepath):
+                    # Check if this absolute path is a root attempt
+                    drive_abs, tail_abs = os.path.splitdrive(os.path.normpath(filepath))
+                    if (drive_abs and tail_abs.startswith(os.sep) and len(tail_abs.strip(os.sep).split(os.sep)) == 1) or \
+                       (not drive_abs and filepath.startswith(os.sep) and len(filepath.strip(os.sep).split(os.sep)) == 1):
+                        response_message = (
+                            f"Creating files directly in a root directory like '{os.path.dirname(os.path.normpath(filepath))}' "
+                            "is often restricted due to permissions. Please try a path in your user folders, "
+                            "like 'Documents/my_file.txt', or just a filename to save in your home directory."
+                        )
+                        # success remains False by default
+                    else: # Absolute path, not root, use as is
+                        success, response_message = os_agent.create_file(final_filepath_to_use, content, file_type)
+                else: # Relative path, expand to home
+                    final_filepath_to_use = os.path.expanduser(os.path.join("~", filepath))
+                    success, response_message = os_agent.create_file(final_filepath_to_use, content, file_type)
         else:
             response_message = "I need a filepath to create a file."
 
@@ -154,27 +238,44 @@ def main_loop():
             # Default to voice input. Text input can be a fallback or configurable option.
             # For now, we'll set it directly to "voice".
             # A more advanced setup might use a config variable from config.py
-            command_input_method = "voice" # Defaulting to voice
+            # command_input_method = "voice" # Defaulting to voice
+
+            command_input_method = ""
+            while command_input_method not in ['s', 't']:
+                try:
+                    # Prompting in the console, not via TTS, as this is a pre-command setup
+                    raw_choice = input("Choose input method: Speak (s) or Type (t), then press Enter: ").lower()
+                    if raw_choice in ['s', 't']:
+                        command_input_method = raw_choice
+                    else:
+                        print("Invalid choice. Please enter 's' or 't'.")
+                except EOFError:
+                    logger.info("EOF received during input mode selection, treating as exit.")
+                    tts.speak("Exiting.")
+                    return # Exit main_loop
+
 
             text_command = None
-            if command_input_method == "voice":
+            if command_input_method == "s": # Speech input
                 logger.info("Listening for voice command...")
+                tts.speak("Listening...")
                 text_command = recognizer.listen()
                 if text_command:
                     logger.info(f"Voice command received: {text_command}")
                 else:
                     logger.info("No voice command detected or error in recognition.")
-                    # Potentially speak "didn't catch that" or just loop
-                    # For now, if listen() returns None (error/silence), we just loop.
-                    # The recognizer.listen() should handle logging its own errors.
+                    tts.speak("I didn't catch that. Please try again.")
                     continue # Skip processing if no command heard
-            else: # Text input mode
+            else: # Text input mode (command_input_method == "t")
                 try:
-                    text_command = input("Enter command: ")
-                except EOFError: # Handle Ctrl+D or similar that might close input stream
+                    text_command = input("הקלד פקודה: ") # "Type command: " in Hebrew as per user log
+                except EOFError:
                     logger.info("EOF received, treating as exit command.")
-                    text_command = "exit jarvis"
-
+                    text_command = "exit jarvis" # Or handle exit more directly
+                except KeyboardInterrupt:
+                    logger.info("Keyboard interrupt during text input, treating as exit.")
+                    tts.speak("Exiting.")
+                    return # Exit main_loop
 
             if text_command: # Proceed only if a command was actually received
                 logger.info(f"Recognized command: {text_command}")
@@ -215,7 +316,24 @@ def main_loop():
                         if app_agent.open_app(app_name):
                             response_message = f"Opening {app_name}."
                         else:
-                            response_message = f"Sorry, I couldn't open {app_name}."
+                            if os.name == 'nt':
+                                if app_name.lower() == "microsoft store":
+                                    response_message = "Opening the Microsoft Store programmatically is complex. You might need to open it manually or set up a custom shortcut in USER_APP_PATHS in config.py."
+                                else:
+                                    response_message = (
+                                        f"Sorry, I couldn't open '{app_name}'. "
+                                        "Please ensure it's installed and the name is correct. "
+                                        "If it's a Microsoft Store app or in a non-standard location, "
+                                        "you may need to add its specific launch command or full path "
+                                        "to USER_APP_PATHS in the jarvis_assistant/config.py file. "
+                                        "For Store apps, this might involve an 'explorer.exe shell:AppsFolder\\...' command."
+                                    )
+                            else: # Non-Windows OS
+                                response_message = (
+                                    f"Sorry, I couldn't open '{app_name}'. "
+                                    "Please ensure it's installed and the name is correct, or add its path "
+                                    "to USER_APP_PATHS in the config.py file."
+                                )
                     else:
                         response_message = "Which application would you like to open?"
                 elif intent == "close_app":
@@ -271,7 +389,50 @@ def main_loop():
                     # For now, just echo what the LLM might say or a generic response.
                     query_text = entities.get("query_text", text_command)
                     # This could be another LLM call for a conversational response
-                    response_message = f"Regarding your query: {query_text}... I'm still learning to handle general conversation."
+                    query_text_lower = query_text.lower()
+                    if "which apps can you open" in query_text_lower or "what apps can you open" in query_text_lower:
+                        known_apps = list(app_agent.app_map.keys())
+                        response_message = (
+                            "I can try to open applications I know by default, like Notepad, Calculator, Chrome, Firefox, and a generic 'browser'. "
+                            f"Currently, my full list of recognized app names includes: {', '.join(known_apps)}. "
+                            "You can also teach me new ones by adding their full path to USER_APP_PATHS in the config.py file. "
+                            "What app would you like to open?"
+                        )
+                    elif "can you speak" in query_text_lower and "hebrew" in query_text_lower:
+                        response_message = "I understand commands in English, and my responses are currently in English. Support for speaking other languages like Hebrew is not yet implemented."
+                    else:
+                        response_message = f"Regarding your query: {query_text}... I'm still learning to handle general conversation."
+                elif intent == "summarize_text":
+                    filepath = entities.get("filepath")
+                    source_url = entities.get("source_url")
+                    text_to_summarize = entities.get("text_to_summarize")
+
+                    if filepath:
+                        # Resolve path relative to home if not absolute
+                        if not os.path.isabs(filepath):
+                            filepath = os.path.expanduser(os.path.join("~", filepath))
+
+                        success_read, content_or_error = os_agent.read_file_content(filepath)
+                        if success_read:
+                            # For now, just present a snippet as "reading"
+                            # TTS might struggle with very long content.
+                            snippet = content_or_error[:500] # Read first 500 chars
+                            response_message = f"Here's the beginning of the file '{os.path.basename(filepath)}':\n{snippet}"
+                            if len(content_or_error) > 500:
+                                response_message += "\n\n(The file is longer, I've read the first part.)"
+                        else:
+                            response_message = content_or_error # This will be the error message from read_file_content
+                    elif source_url:
+                        # This would be where web_agent.summarize_url(source_url) or similar is called
+                        response_message = f"I would summarize {source_url}, but web page summarization needs to be fully connected."
+                        # Placeholder: content = web_agent.fetch_page_content(source_url)
+                        # if content: response_message = web_agent.summarize_text_content(content) else: ...
+                    elif text_to_summarize:
+                        # This would be web_agent.summarize_text_content(text_to_summarize)
+                        response_message = "I would summarize the text you provided, but text summarization needs to be fully connected."
+                    else:
+                        response_message = "I need a file path, a URL, or some text to summarize."
+
                 elif intent == "unknown":
                     response_message = "I'm not sure how to handle that command. Could you try rephrasing?"
                     if "error" in entities: # If LLM itself had an issue producing JSON
