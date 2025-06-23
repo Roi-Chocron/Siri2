@@ -1,0 +1,95 @@
+2025-06-23 04:28:56,437 - JARVIS_Main - INFO - J.A.R.V.I.S. Assistant Initializing...
+2025-06-23 04:28:56,535 - comtypes.client._code_cache - INFO - Imported existing <module 'comtypes.gen' from 'C:\\Users\\roich\\OneDrive\\מסמכים\\Siri2\\.venv\\Lib\\site-packages\\comtypes\\gen\\__init__.py'>
+2025-06-23 04:28:56,536 - comtypes.client._code_cache - INFO - Using writeable comtypes cache directory: 'C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\comtypes\gen'
+2025-06-23 04:28:56,661 - CommandParser - INFO - CommandParser initialized with Gemini model models/gemini-1.5-flash.
+2025-06-23 04:28:56,663 - JARVIS_Main - INFO - Core components initialized.
+2025-06-23 04:28:59,557 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:29:01,808 - JARVIS_Main - INFO - Recognized command: HI!
+2025-06-23 04:29:06,150 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "general_query",
+  "entities": {
+    "query_text": "HI!"
+  }
+}
+```
+
+2025-06-23 04:29:06,151 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'general_query', 'entities': {'query_text': 'HI!'}}
+2025-06-23 04:29:06,151 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'general_query', 'entities': {'query_text': 'HI!'}}
+2025-06-23 04:29:06,151 - JARVIS_Main - INFO - Response to user: Regarding your query: HI!... I'm still learning to handle general conversation.
+2025-06-23 04:29:11,648 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:32:10,527 - JARVIS_Main - INFO - Recognized command: Open Edge browser
+2025-06-23 04:32:14,387 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "open_app",
+  "entities": {
+    "app_name": "Edge browser"
+  }
+}
+```
+
+2025-06-23 04:32:14,389 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'open_app', 'entities': {'app_name': 'Edge browser'}}
+2025-06-23 04:32:14,389 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'open_app', 'entities': {'app_name': 'Edge browser'}}
+2025-06-23 04:32:14,409 - JARVIS_Main - INFO - Response to user: Sorry, I couldn't open Edge browser.
+2025-06-23 04:32:17,661 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:32:48,937 - JARVIS_Main - INFO - Recognized command: What the diffrent between snowman and snowoman? snowballs!
+2025-06-23 04:32:55,532 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "search_info",
+  "entities": {
+    "query": "What the diffrent between snowman and snowoman?",
+    "summarize": false
+  }
+}
+```
+
+2025-06-23 04:32:55,533 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'search_info', 'entities': {'query': 'What the diffrent between snowman and snowoman?', 'summarize': False}}
+2025-06-23 04:32:55,533 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'search_info', 'entities': {'query': 'What the diffrent between snowman and snowoman?', 'summarize': False}}
+2025-06-23 04:32:55,648 - JARVIS_Main - INFO - Response to user: I've opened a browser tab with search results for What the diffrent between snowman and snowoman?.
+2025-06-23 04:33:00,972 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:33:34,136 - JARVIS_Main - INFO - Recognized command: Search in google: "Matan Peretz"
+2025-06-23 04:33:39,020 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "search_info",
+  "entities": {
+    "query": "Matan Peretz",
+    "summarize": false
+  }
+}
+```
+
+2025-06-23 04:33:39,021 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'search_info', 'entities': {'query': 'Matan Peretz', 'summarize': False}}
+2025-06-23 04:33:39,021 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'search_info', 'entities': {'query': 'Matan Peretz', 'summarize': False}}
+2025-06-23 04:33:39,060 - JARVIS_Main - INFO - Response to user: I've opened a browser tab with search results for Matan Peretz.
+2025-06-23 04:33:43,065 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:34:01,293 - JARVIS_Main - INFO - Recognized command: Which action can you do?
+2025-06-23 04:34:05,335 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "general_query",
+  "entities": {
+    "query_text": "Which action can you do?"
+  }
+}
+```
+
+2025-06-23 04:34:05,336 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'general_query', 'entities': {'query_text': 'Which action can you do?'}}
+2025-06-23 04:34:05,337 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'general_query', 'entities': {'query_text': 'Which action can you do?'}}
+2025-06-23 04:34:05,337 - JARVIS_Main - INFO - Response to user: Regarding your query: Which action can you do?... I'm still learning to handle general conversation.
+2025-06-23 04:34:11,622 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:36:18,245 - JARVIS_Main - INFO - Recognized command: Create a folder on your desktop called: "ROI THE KING"
+2025-06-23 04:36:24,307 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "create_directory",
+  "entities": {
+    "dir_path": "C:\\Users\\%USERNAME%\\Desktop\\ROI THE KING"
+  }
+}
+```
+
+2025-06-23 04:36:24,308 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'create_directory', 'entities': {'dir_path': 'C:\\Users\\%USERNAME%\\Desktop\\ROI THE KING'}}
+2025-06-23 04:36:24,308 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'create_directory', 'entities': {'dir_path': 'C:\\Users\\%USERNAME%\\Desktop\\ROI THE KING'}}
+2025-06-23 04:36:24,312 - OSInteraction - ERROR - Error creating directory C:\Users\%USERNAME%\Desktop\ROI THE KING: [WinError 5] Access is denied: 'C:\\Users\\%USERNAME%'
+2025-06-23 04:36:24,313 - JARVIS_Main - INFO - Response to user: Error creating directory C:\Users\%USERNAME%\Desktop\ROI THE KING: [WinError 5] Access is denied: 'C:\\Users\\%USERNAME%'
+2025-06-23 04:36:38,075 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:38:34,059 - JARVIS_Main - INFO - User interrupted the main loop. Shutting down.
+2025-06-23 04:38:37,111 - JARVIS_Main - INFO - J.A.R.V.I.S. Assistant shutting down.

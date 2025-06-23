@@ -1,0 +1,97 @@
+2025-06-23 04:41:12,233 - JARVIS_Main - INFO - J.A.R.V.I.S. Assistant Initializing...
+2025-06-23 04:41:12,517 - comtypes.client._code_cache - INFO - Imported existing <module 'comtypes.gen' from 'C:\\Users\\roich\\OneDrive\\מסמכים\\Siri2\\.venv\\Lib\\site-packages\\comtypes\\gen\\__init__.py'>
+2025-06-23 04:41:12,518 - comtypes.client._code_cache - INFO - Using writeable comtypes cache directory: 'C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\comtypes\gen'
+2025-06-23 04:41:12,691 - CommandParser - INFO - CommandParser initialized with Gemini model models/gemini-1.5-flash.
+2025-06-23 04:41:12,692 - JARVIS_Main - INFO - Core components initialized.
+2025-06-23 04:41:15,592 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:41:26,103 - JARVIS_Main - INFO - Recognized command: Create a folder on your desktop called: "ROI THE KING"
+2025-06-23 04:41:32,335 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "create_directory",
+  "entities": {
+    "dir_path": "C:\\Users\\%USERNAME%\\Desktop\\ROI THE KING"
+  }
+}
+```
+
+2025-06-23 04:41:32,336 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'create_directory', 'entities': {'dir_path': 'C:\\Users\\%USERNAME%\\Desktop\\ROI THE KING'}}
+2025-06-23 04:41:32,336 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'create_directory', 'entities': {'dir_path': 'C:\\Users\\%USERNAME%\\Desktop\\ROI THE KING'}}
+2025-06-23 04:41:32,338 - OSInteraction - INFO - Directory created or already exists: C:\Users\roich\Desktop\ROI THE KING
+2025-06-23 04:41:32,338 - JARVIS_Main - INFO - Response to user: Directory created or already exists: C:\Users\roich\Desktop\ROI THE KING
+2025-06-23 04:41:40,695 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:44:03,443 - JARVIS_Main - INFO - Recognized command: Create a folder called "test_folder"
+2025-06-23 04:44:08,399 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "create_directory",
+  "entities": {
+    "dir_path": "test_folder"
+  }
+}
+```
+
+2025-06-23 04:44:08,399 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'create_directory', 'entities': {'dir_path': 'test_folder'}}
+2025-06-23 04:44:08,400 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'create_directory', 'entities': {'dir_path': 'test_folder'}}
+2025-06-23 04:44:08,401 - OSInteraction - INFO - Directory created or already exists: C:\Users\roich\test_folder
+2025-06-23 04:44:08,401 - JARVIS_Main - INFO - Response to user: Directory created or already exists: C:\Users\roich\test_folder
+2025-06-23 04:44:15,906 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:45:03,831 - JARVIS_Main - INFO - Recognized command: Open calculator
+2025-06-23 04:45:07,816 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "open_app",
+  "entities": {
+    "app_name": "calculator"
+  }
+}
+```
+
+2025-06-23 04:45:07,817 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'open_app', 'entities': {'app_name': 'calculator'}}
+2025-06-23 04:45:07,817 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'open_app', 'entities': {'app_name': 'calculator'}}
+2025-06-23 04:45:07,903 - JARVIS_Main - INFO - Response to user: Opening calculator.
+2025-06-23 04:45:09,977 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:45:16,179 - JARVIS_Main - INFO - Recognized command: open netflix
+2025-06-23 04:45:19,841 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "open_app",
+  "entities": {
+    "app_name": "netflix"
+  }
+}
+```
+
+2025-06-23 04:45:19,842 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'open_app', 'entities': {'app_name': 'netflix'}}
+2025-06-23 04:45:19,842 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'open_app', 'entities': {'app_name': 'netflix'}}
+2025-06-23 04:45:19,864 - JARVIS_Main - INFO - Response to user: Sorry, I couldn't open netflix.
+2025-06-23 04:45:23,018 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:45:31,538 - JARVIS_Main - INFO - Recognized command: open youtube music
+2025-06-23 04:45:35,372 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "open_app",
+  "entities": {
+    "app_name": "youtube music"
+  }
+}
+```
+
+2025-06-23 04:45:35,373 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'open_app', 'entities': {'app_name': 'youtube music'}}
+2025-06-23 04:45:35,374 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'open_app', 'entities': {'app_name': 'youtube music'}}
+2025-06-23 04:45:35,392 - JARVIS_Main - INFO - Response to user: Sorry, I couldn't open youtube music.
+2025-06-23 04:45:38,740 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:45:46,464 - JARVIS_Main - INFO - Recognized command: play random song
+2025-06-23 04:45:50,267 - CommandParser - INFO - Raw LLM response: ```json
+{
+  "intent": "media_play",
+  "entities": {
+    "player_name": null,
+    "track_or_playlist": "random song"
+  }
+}
+```
+
+2025-06-23 04:45:50,268 - CommandParser - INFO - Successfully parsed LLM response into JSON: {'intent': 'media_play', 'entities': {'player_name': None, 'track_or_playlist': 'random song'}}
+2025-06-23 04:45:50,268 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'media_play', 'entities': {'player_name': None, 'track_or_playlist': 'random song'}}
+2025-06-23 04:45:50,269 - MediaController - INFO - Attempting to execute 'play' for player 'default' with track/playlist 'random song'
+2025-06-23 04:45:50,269 - MediaController - WARNING - Direct CLI control for 'None' on Windows is often limited or player-specific. This function is a placeholder for Windows.
+2025-06-23 04:45:50,269 - JARVIS_Main - INFO - Response to user: Direct CLI control for 'None' on Windows is often limited or player-specific. This function is a placeholder for Windows.
+2025-06-23 04:45:57,763 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:57:51,200 - JARVIS_Main - INFO - User interrupted the main loop. Shutting down.
+2025-06-23 04:57:54,198 - JARVIS_Main - INFO - J.A.R.V.I.S. Assistant shutting down.

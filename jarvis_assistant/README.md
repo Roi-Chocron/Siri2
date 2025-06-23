@@ -11,7 +11,7 @@ This project is an advanced AI-powered computer control system, designed to func
     *   Control system settings (brightness, volume).
 *   **Application and Media Management:**
     *   Open and close installed software.
-    *   Control media players (play, pause, skip, rewind).
+    *   Control media players (play, pause, skip, rewind).`
 *   **Web Interaction:**
     *   Open specific websites.
     *   Perform information searches and summarize results.
