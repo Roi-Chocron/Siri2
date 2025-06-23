@@ -37,8 +37,9 @@ Analyze the following user command and extract the primary intent and relevant e
 Your response MUST be a single valid JSON object. Do not include any text before or after the JSON object.
 
 The JSON object should have two main keys: "intent" and "entities".
+
 "intent" should be a string from the following list (or "unknown" if not applicable):
-  - "create_text_file"
+  - "create_file"  # Generic file creation, entities will specify type (txt, doc, sheet)
   - "create_directory"
   - "delete_path"
   - "move_path"
@@ -50,37 +51,51 @@ The JSON object should have two main keys: "intent" and "entities".
   - "close_app"
   - "open_website"
   - "search_info"
+  - "summarize_text" # New intent for summarizing provided text or web page content
   - "media_play"
   - "media_pause"
   - "media_skip"
-  - "media_previous"
+  - "media_previous" # Can also be "rewind" or "go back"
+  - "fill_web_form" # For Phase 2
+  - "simulate_online_purchase" # For Phase 2 (simulation only)
   - "general_query" (for things like "what time is it?" or "tell me a joke")
+  - "store_auth_info" # For security manager interaction
+  - "get_auth_info" # For security manager interaction
   - "exit"
 
 "entities" should be a JSON object containing relevant extracted information. Examples:
-  - For "create_text_file": {{"filepath": "path/to/file.txt", "content": "file content here"}}
+  - For "create_file": {{"filepath": "path/to/file.ext", "content": "optional file content here", "file_type": "txt/document/spreadsheet"}} (default file_type to "txt" if not clear)
   - For "create_directory": {{"dir_path": "path/to/directory"}}
   - For "delete_path": {{"path": "path/to/delete"}}
   - For "move_path": {{"source_path": "path/to/source", "destination_path": "path/to/destination"}}
   - For "list_directory_contents": {{"dir_path": "path/to/list"}}
-  - For "execute_command": {{"command_str": "the command to run", "shell_type": "cmd/powershell/bash/sh/zsh"}} (default shell_type to "cmd" on Windows, "sh" on POSIX if not specified)
-  - For "set_brightness": {{"level": 0-100}}
-  - For "set_volume": {{"level": 0.0-1.0}} (e.g. "set volume to 50%" means level 0.5)
-  - For "open_app": {{"app_name": "application name"}}
-  - For "close_app": {{"app_name": "application name or exe"}}
-  - For "open_website": {{"url": "website_url.com"}}
-  - For "search_info": {{"query": "search query", "summarize": true/false}} (default summarize to false)
-  - For "media_play": {{"player_name": "spotify/apple music/etc", "track_or_playlist": "optional track/playlist"}}
-  - For "media_pause": {{"player_name": "spotify/apple music/etc"}}
-  - For "media_skip": {{"player_name": "spotify/apple music/etc"}}
-  - For "media_previous": {{"player_name": "spotify/apple music/etc"}}
+  - For "execute_command": {{"command_str": "the command to run (can be multi-line)", "shell_type": "cmd/powershell/bash/sh/zsh"}} (default shell_type appropriately by OS if not specified)
+  - For "set_brightness": {{"level": 75}} (integer 0-100, e.g., "set brightness to 75%", "dim screen to 20")
+  - For "set_volume": {{"level": 0.5}} (float 0.0-1.0, e.g. "set volume to 50%" means level 0.5, "mute" means level 0.0, "max volume" means 1.0)
+  - For "open_app": {{"app_name": "application name or path"}}
+  - For "close_app": {{"app_name": "application name or process name"}}
+  - For "open_website": {{"url": "website_url.com (try to make it a full URL like http://...)"}}
+  - For "search_info": {{"query": "search query", "summarize": true/false}} (default summarize to false; if true, the main app will call summarize_text after search)
+  - For "summarize_text": {{"text_to_summarize": "long text here", "source_url": "optional_url_if_text_is_from_webpage"}}
+  - For "media_play": {{"player_name": "spotify/apple music/native/default etc.", "track_or_playlist": "optional track/playlist name"}}
+  - For "media_pause": {{"player_name": "spotify/apple music/native/default etc."}}
+  - For "media_skip": {{"player_name": "spotify/apple music/native/default etc."}} (for "next track")
+  - For "media_previous": {{"player_name": "spotify/apple music/native/default etc."}} (for "previous track" or "rewind")
+  - For "fill_web_form": {{"url": "target_url", "form_type_identifier": "e.g., generic_registration, specific_site_login", "data_profile_key": "key_for_security_manager_data"}}
+  - For "simulate_online_purchase": {{"item_description": "item to search for", "site_url": "optional_target_site", "dummy_data_profile_key": "key_for_security_manager_test_data"}}
   - For "general_query": {{"query_text": "full user query"}}
+  - For "store_auth_info": {{"service_name": "service identifier", "username": "user's name for the service", "data_to_store": "the sensitive data/password"}}
+  - For "get_auth_info": {{"service_name": "service identifier", "username": "user's name for the service"}}
   - For "exit": {{}}
 
-If a path is mentioned, try to make it absolute if possible, or specify if it's relative.
-If a value is clearly a percentage for volume/brightness, convert it to the required format (0-100 for brightness, 0.0-1.0 for volume).
-If no specific player is mentioned for media commands, you can try to infer or leave it null.
-If no shell_type is mentioned for execute_command, default to "cmd" on Windows and "sh" on other OSes.
+General Instructions for Entity Extraction:
+- File Paths: If a user says "my documents" or "desktop", try to map these to standard user directory paths. If a path is relative, keep it relative unless easily resolvable to an absolute one. For file creation, try to infer the file extension if not explicitly given but a file type (document, spreadsheet) is mentioned.
+- Application Names: Be flexible. "Word" could be "Microsoft Word".
+- URLs: If a user says "google.com", convert to "http://google.com" or "https://google.com".
+- Percentages: For brightness/volume, convert "75 percent" or "half" to the numerical target format.
+- Complex Commands: For "execute_command", the "command_str" can contain newlines if the user dictates a multi-line script.
+- Summarization: If the user asks to search AND summarize, the intent should be "search_info" with "summarize": true. The main application flow will then handle getting the content and calling a "summarize_text" action. If the user provides text directly or points to a page to summarize, use "summarize_text".
+- Media Player: If no player is specified, use a sensible default like "default" or "native". "Rewind" can map to "media_previous" or a specific player's rewind function if that level of detail is later supported.
 
 User command: "{text_command}"
 
@@ -142,26 +157,34 @@ if __name__ == '__main__':
     try:
         parser = CommandParser()
         commands_to_test = [
-            "create a text file named my_notes.txt with content hello world",
-            "make a new folder called important documents in my user directory",
-            "delete the file temp.log",
-            "move old_report.docx to the archive folder",
-            "what files are in my downloads folder?",
-            "run ipconfig in command prompt",
-            "set brightness to 75 percent",
-            "turn the volume up to 0.8",
-            "open notepad",
-            "close chrome",
-            "go to google.com",
-            "search for the weather in London and summarize it",
-            "play my workout playlist on spotify",
-            "pause spotify",
-            "next song on spotify",
-            "what time is it?",
-            "exit jarvis now"
+            "create a document called report.txt with content This is my report.",
+            "make a spreadsheet named budget",
+            "run the command ls -la in my home directory using bash",
+            "search for python programming tutorials and summarize them",
+            "summarize this article from https://example.com/article",
+            "play the album dark side of the moon on spotify",
+            "open my custom editor",
+            "increase screen brightness to 90%",
+            "set master volume to half",
+            "what is the weather like today?", # general_query
+            "exit"
         ]
 
-        for command in commands_to_test:
+        expected_intents = [
+            "create_file",
+            "create_file",
+            "execute_command",
+            "search_info", # summarize: True will be an entity
+            "summarize_text", # Assuming the LLM can distinguish this from search_info based on phrasing
+            "media_play",
+            "open_app",
+            "set_brightness",
+            "set_volume",
+            "general_query",
+            "exit"
+        ]
+
+        for i, command in enumerate(commands_to_test):
             print(f"\n--- Testing Command: '{command}' ---")
             parsed_output = parser.parse_command(command)
             print(f"Parsed Output: {json.dumps(parsed_output, indent=2)}")

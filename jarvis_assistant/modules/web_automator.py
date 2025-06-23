@@ -8,12 +8,46 @@ from bs4 import BeautifulSoup
 # from selenium.webdriver.support.ui import WebDriverWait # Placeholder
 # from selenium.webdriver.support import expected_conditions as EC # Placeholder
 from jarvis_assistant.core.security_manager import SecurityManager # For secure details
+from jarvis_assistant.utils.logger import get_logger # Import logger
+from jarvis_assistant.core.command_parser import CommandParser # For LLM-based summarization
+
+# Ensure get_logger can be found if this module is run standalone for testing
+if __name__ == '__main__' and __package__ is None:
+    import sys
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    from jarvis_assistant.utils.logger import get_logger
+    # Need CommandParser for standalone summarization test
+    from jarvis_assistant.core.command_parser import CommandParser
+
 
 class WebAutomator:
     def __init__(self):
-        self.default_search_engine = "https://www.google.com/search?q="
+        self.logger = get_logger(self.__class__.__name__)
+        self.default_search_engine = "https://www.google.com/search?q=" # Can be made configurable
         # self.driver = None # For Selenium, initialize when needed
         self.security_manager = SecurityManager()
+        # Initialize CommandParser if needed for summarization, or pass it in.
+        # For now, let's assume CommandParser might be instantiated if summarization is complex.
+        # Or, we can make a simpler LLM call directly.
+        # Let's try a direct call to Gemini model for summarization within this class for now.
+        # This avoids making WebAutomator dependent on passing CommandParser instance.
+        try:
+            from jarvis_assistant.config import GEMINI_API_KEY
+            import google.generativeai as genai
+            if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
+                genai.configure(api_key=GEMINI_API_KEY)
+                self.summarizer_model = genai.GenerativeModel('models/gemini-1.5-flash') # Or a different one if needed
+                self.logger.info("Gemini model for summarization initialized in WebAutomator.")
+            else:
+                self.summarizer_model = None
+                self.logger.warning("Gemini API key not configured. LLM-based summarization will be disabled.")
+        except Exception as e:
+            self.summarizer_model = None
+            self.logger.error(f"Failed to initialize Gemini model for summarization in WebAutomator: {e}")
+
 
     def open_website(self, url: str) -> bool:
         """Opens a specific website in the default web browser."""
@@ -21,65 +55,167 @@ class WebAutomator:
             if not url.startswith("http://") and not url.startswith("https://"):
                 url = "https://" + url
             webbrowser.open_new_tab(url)
-            print(f"Opened website: {url}")
+            self.logger.info(f"Opened website: {url}")
             return True
         except Exception as e:
-            print(f"Error opening website {url}: {e}")
+            self.logger.error(f"Error opening website {url}: {e}")
             return False
+
+    def _extract_text_from_html(self, html_content: str) -> str:
+        """Extracts meaningful text from HTML content using BeautifulSoup."""
+        soup = BeautifulSoup(html_content, 'lxml')
+
+        # Remove script and style elements
+        for script_or_style in soup(["script", "style"]):
+            script_or_style.decompose()
+
+        # Get text, attempting to preserve some structure with line breaks for paragraphs/divs
+        # This is a heuristic and might need refinement.
+        text_parts = []
+        for element in soup.find_all(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'article', 'section']):
+            text = element.get_text(separator=' ', strip=True)
+            if text:
+                text_parts.append(text)
+
+        full_text = "\n".join(text_parts)
+        if not full_text: # Fallback if no specific tags yielded text
+            full_text = soup.get_text(separator='\n', strip=True)
+
+        # Reduce multiple newlines to a single one for cleaner output to LLM
+        return '\n'.join(line for line in full_text.splitlines() if line.strip())
+
+
+    def _summarize_text_with_llm(self, text: str, query_context: str = None) -> str | None:
+        """Summarizes the given text using the configured LLM."""
+        if not self.summarizer_model:
+            self.logger.warning("Summarizer model not available. Cannot summarize text with LLM.")
+            return None
+        if not text or not text.strip():
+            self.logger.warning("No text provided to summarize.")
+            return "No content found to summarize."
+
+        # Truncate text if it's too long for the LLM context window (e.g., > 20000 chars as a rough limit)
+        # Gemini 1.5 Flash has a large context window, but still good practice.
+        max_chars = 25000
+        if len(text) > max_chars:
+            self.logger.info(f"Text too long ({len(text)} chars), truncating to {max_chars} for summarization.")
+            text = text[:max_chars]
+
+        prompt = f"Please provide a concise summary of the following text. Focus on the key information."
+        if query_context:
+            prompt += f"\nThe original query or topic of interest was: '{query_context}'."
+        prompt += f"\n\nText to summarize:\n{text}"
+
+        try:
+            response = self.summarizer_model.generate_content(prompt)
+            summary = response.text.strip()
+            self.logger.info(f"LLM summary generated for query '{query_context if query_context else 'N/A'}'. Length: {len(summary)}")
+            return summary
+        except Exception as e:
+            self.logger.error(f"Error during LLM summarization: {e}")
+            return "Sorry, I encountered an error while trying to summarize the content."
+
 
     def search_info(self, query: str, summarize: bool = False) -> str | None:
         """
         Performs an information search on the default search engine.
-        Optionally summarizes the results (basic text extraction for now).
-        Returns the direct search URL or summarized text.
+        If summarize is True, it fetches the content of the first search result (heuristic)
+        and uses an LLM to summarize it.
+        Returns the direct search URL (if not summarizing) or summarized text/error message.
         """
         try:
             search_url = self.default_search_engine + query.replace(" ", "+")
+            self.logger.info(f"Performing search for: '{query}' at URL: {search_url}")
+
             if not summarize:
                 webbrowser.open_new_tab(search_url)
-                print(f"Performing search for: {query}. Results opened in browser.")
-                return search_url
+                self.logger.info(f"Search results for '{query}' opened in browser.")
+                return search_url # Return the search URL itself
             else:
-                print(f"Performing search for: {query} and attempting to summarize...")
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+                self.logger.info(f"Attempting to fetch and summarize results for '{query}'...")
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Referer': 'https://www.google.com/'
+                }
+                # First, get the search results page
                 response = requests.get(search_url, headers=headers, timeout=10)
-                response.raise_for_status() # Raise an exception for HTTP errors
+                response.raise_for_status()
+                soup = BeautifulSoup(response.text, 'lxml')
 
-                soup = BeautifulSoup(response.text, 'lxml') # Using lxml parser
+                # Heuristically find the first organic search result link.
+                # This is highly dependent on Google's (or other engine's) HTML structure and can break.
+                # Google often uses <h3> tags within <a> tags with class 'yuRUbf' or similar for organic results.
+                # Or look for <a> tags with an href starting with /url?q= which is a common Google redirect.
+                first_result_link = None
 
-                # Basic summarization: extract text from main content areas
-                # This is highly dependent on search engine's HTML structure and might break easily.
-                # For Google, relevant info might be in divs with specific classes or IDs.
-                # This is a very naive approach. A proper summarization would involve an LLM.
+                # Try a few common Google selectors
+                # Selector 1: Standard organic results
+                link_tag = soup.find('div', class_='yuRUbf')
+                if link_tag:
+                    link_tag = link_tag.find('a')
+                    if link_tag and link_tag.get('href'):
+                        first_result_link = link_tag.get('href')
+                        self.logger.info(f"Found potential first result link (selector 1): {first_result_link}")
 
-                snippets = []
-                # Common Google result snippets are often in divs with class 'BNeawe vvjwJb AP7Wnd' or similar
-                # This is very fragile and likely to change.
-                for item in soup.find_all('div', class_=['BNeawe', 'vvjwJb', 'AP7Wnd', 's3v9rd']): # Add more as observed
-                    text = item.get_text(separator=' ', strip=True)
-                    if text and len(text) > 50 : # Filter out very short or irrelevant texts
-                        snippets.append(text)
-                        if len(snippets) >= 3: # Limit to first few snippets for brevity
+                # Selector 2: If above fails, look for simpler <a> inside <h3> (less specific)
+                if not first_result_link:
+                    for h3 in soup.find_all('h3'):
+                        parent_a = h3.find_parent('a')
+                        if parent_a and parent_a.get('href') and parent_a.get('href').startswith(('http://', 'https://')):
+                            first_result_link = parent_a.get('href')
+                            self.logger.info(f"Found potential first result link (selector 2 - h3>a): {first_result_link}")
                             break
 
-                if snippets:
-                    summary = "\n".join(snippets)
-                    print(f"Summary for '{query}':\n{summary}")
-                    return summary
+                # Selector 3: Google's redirect links (less ideal as they are redirects)
+                if not first_result_link:
+                    redirect_link = soup.find('a', href=lambda href: href and href.startswith("/url?q="))
+                    if redirect_link:
+                        full_url = redirect_link.get('href')
+                        if full_url.startswith("/url?q="):
+                            from urllib.parse import parse_qs, urlparse
+                            parsed_url = urlparse(full_url)
+                            query_params = parse_qs(parsed_url.query)
+                            if 'url' in query_params: # Google Scholar sometimes uses 'url'
+                                first_result_link = query_params['url'][0]
+                            elif 'q' in query_params: # Standard Google search redirect
+                                first_result_link = query_params['q'][0]
+                            self.logger.info(f"Found potential first result link (selector 3 - redirect): {first_result_link}")
+
+
+                if first_result_link:
+                    self.logger.info(f"Fetching content from first result: {first_result_link}")
+                    page_response = requests.get(first_result_link, headers=headers, timeout=15)
+                    page_response.raise_for_status()
+
+                    page_content_html = page_response.text
+                    extracted_text = self._extract_text_from_html(page_content_html)
+
+                    if extracted_text:
+                        summary = self._summarize_text_with_llm(extracted_text, query_context=query)
+                        if summary:
+                            return summary
+                        else: # LLM summarization failed or disabled
+                            webbrowser.open_new_tab(first_result_link) # Open the page directly
+                            return f"Could not summarize the content from {first_result_link}. The page has been opened in your browser."
+                    else:
+                        webbrowser.open_new_tab(first_result_link)
+                        return f"Could not extract text from the first search result ({first_result_link}). The page has been opened."
                 else:
-                    # Fallback if no good snippets found - could use an LLM here too
+                    # Fallback if no link found on search page - just open search_url
                     webbrowser.open_new_tab(search_url)
-                    return f"Could not extract a concise summary. Opened search results for '{query}' in browser: {search_url}"
+                    return f"Could not identify the first search result link to summarize. Search results for '{query}' opened in browser: {search_url}"
 
         except requests.exceptions.RequestException as e:
-            print(f"Error during web search request for '{query}': {e}")
-            return f"Failed to perform search for '{query}' due to a network error."
+            self.logger.error(f"Error during web search request for '{query}': {e}")
+            return f"Failed to perform search for '{query}' due to a network or connection error."
         except Exception as e:
-            print(f"Error searching info for '{query}': {e}")
-            # Fallback to just opening the search page if summarization fails
+            self.logger.error(f"Unexpected error searching info for '{query}': {e}", exc_info=True)
+            # Fallback to just opening the search page if summarization fails badly
             search_url_fallback = self.default_search_engine + query.replace(" ", "+")
             webbrowser.open_new_tab(search_url_fallback)
-            return f"An error occurred while trying to summarize. Opened search results for '{query}' in browser: {search_url_fallback}"
+            return f"An unexpected error occurred while trying to search and summarize. Opened search results for '{query}' in browser: {search_url_fallback}"
+
 
     def _initialize_selenium_driver(self):
         """Initializes Selenium WebDriver if not already done."""

@@ -16,9 +16,43 @@ if __name__ == '__main__' and __package__ is None:
 class MediaController:
     def __init__(self):
         self.logger = get_logger(self.__class__.__name__)
-        # For more direct control, platform-specific libraries or APIs would be better
-        # e.g., dbus for Spotify on Linux, AppleScript for Apple Music/Spotify on macOS
-        pass
+        self.logger.info("MediaController initialized. Relies on OS-specific tools: AppleScript (macOS), playerctl (Linux).")
+
+        # Check for necessary tools during initialization (optional, or do it per command)
+        if os.name == 'posix' and not hasattr(os, 'uname'): # Generic POSIX, likely Linux if not Darwin
+            if not shutil.which("playerctl"):
+                self.logger.warning("`playerctl` command-line tool not found. Media control on Linux will likely fail. Please install playerctl.")
+        elif os.name == 'posix' and hasattr(os, 'uname') and os.uname().sysname == 'Darwin':
+            if not shutil.which("osascript"):
+                 self.logger.warning("`osascript` command-line tool not found. Media control on macOS will likely fail (this is highly unusual).")
+
+
+    def _get_active_player_macos(self) -> str | None:
+        """Tries to determine the active (or most likely) media player on macOS."""
+        # This is a heuristic. A more robust method might involve checking which app last had media focus.
+        if self._is_player_running_macos("Spotify") and self._is_player_playing_macos("Spotify"):
+            return "Spotify"
+        if self._is_player_running_macos("Music") and self._is_player_playing_macos("Music"):
+            return "Music"
+        # Fallback if none are actively playing but one is running
+        if self._is_player_running_macos("Spotify"):
+            return "Spotify"
+        if self._is_player_running_macos("Music"):
+            return "Music"
+        return None # Could also default to "Music" or "Spotify"
+
+    def _is_player_playing_macos(self, app_name: str) -> bool:
+        """Checks if a specific player is currently playing on macOS."""
+        if not self._is_player_running_macos(app_name):
+            return False
+        try:
+            # Spotify uses 'player state', Music uses 'player state' too
+            script = f'tell application "{app_name}" to get player state as string'
+            result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, check=True, timeout=2)
+            return result.stdout.strip().lower() == "playing"
+        except Exception as e:
+            self.logger.debug(f"Could not determine playing state for {app_name} on macOS: {e}")
+            return False
 
     def _execute_player_command(self, player_name: str, command: str, track_or_playlist: str = None) -> tuple[bool, str]:
         """
@@ -30,91 +64,146 @@ class MediaController:
 
         # --- macOS Specific Examples using osascript ---
         if os.name == 'posix' and hasattr(os, 'uname') and os.uname().sysname == 'Darwin':
-            if player_lower in ["spotify", "apple music", "music", "default"]: # Treat default as Music/Spotify
-                player_app_name = "Spotify" if player_lower == "spotify" else "Music" # Default to Music for "default" or "apple music"
-                if player_lower == "default" and not self._is_player_running_macos("Spotify") and self._is_player_running_macos("Music"):
-                     player_app_name = "Music"
-                elif player_lower == "default" and self._is_player_running_macos("Spotify"):
-                     player_app_name = "Spotify"
-                elif player_lower == "default": # Neither running, try spotify first
-                    player_app_name = "Spotify"
+            if not shutil.which("osascript"):
+                msg = "`osascript` not found. Cannot control media on macOS."
+                self.logger.error(msg)
+                return False, msg
 
-
-                script = ""
-                if command == "play":
-                    if track_or_playlist:
-                        # This is complex. For Spotify: `play track "{track_uri}"`
-                        # For Apple Music: `play (first track of playlist "{playlist_name}" whose name is "{track_name}")`
-                        # Simplified: if track_or_playlist is a spotify URI
-                        if "spotify:track:" in track_or_playlist or "spotify:album:" in track_or_playlist or "spotify:playlist:" in track_or_playlist :
-                             script = f'tell application "Spotify" to play track "{track_or_playlist}"'
-                             player_app_name = "Spotify" # Force Spotify if URI is given
-                        else:
-                            script = f'tell application "{player_app_name}" to play' # General play
-                            self.logger.info(f"Playing specific track/playlist '{track_or_playlist}' by name via AppleScript is complex and not fully implemented; attempting general play for {player_app_name}.")
-                    else:
-                        script = f'tell application "{player_app_name}" to play'
-                elif command == "pause":
-                    script = f'tell application "{player_app_name}" to pause'
-                elif command == "next":
-                    script = f'tell application "{player_app_name}" to next track'
-                elif command == "previous":
-                    script = f'tell application "{player_app_name}" to previous track'
-
-                if script:
-                    try:
-                        subprocess.run(["osascript", "-e", script], check=True, timeout=5)
-                        msg = f"Executed '{command}' for {player_app_name} on macOS."
-                        self.logger.info(msg)
-                        return True, msg
-                    except subprocess.TimeoutExpired:
-                        msg = f"Command '{command}' for {player_app_name} timed out on macOS."
-                        self.logger.error(msg)
-                        return False, msg
-                    except Exception as e:
-                        msg = f"Error executing AppleScript for {player_app_name}: {e}"
-                        self.logger.error(msg)
-                        return False, msg
+            target_player_app_name = None
+            if player_lower == "spotify":
+                target_player_app_name = "Spotify"
+            elif player_lower in ["apple music", "music", "itunes"]: # iTunes is old name for Music
+                target_player_app_name = "Music"
+            elif player_lower == "default":
+                target_player_app_name = self._get_active_player_macos()
+                if not target_player_app_name:
+                    # If no active player, try to launch Spotify by default or Music if Spotify isn't common for user.
+                    # For now, let's assume user wants to control one if it's running, or default to Spotify.
+                    target_player_app_name = "Spotify" # Could be configurable
+                    self.logger.info(f"'Default' player on macOS, no active player identified, defaulting to control {target_player_app_name}.")
                 else:
-                    msg = f"Command '{command}' not directly supported for {player_app_name} via simple AppleScript in this example."
-                    self.logger.warning(msg)
+                    self.logger.info(f"'Default' player on macOS, identified active/running player as {target_player_app_name}.")
+            else:
+                msg = f"Player '{player_name}' is not explicitly supported on macOS. Supported: Spotify, Music, Default."
+                self.logger.warning(msg)
+                return False, msg
+
+            if not self._is_player_running_macos(target_player_app_name) and command != "play":
+                # Don't try to pause/skip if player isn't even running, unless it's a play command (which might launch it)
+                msg = f"{target_player_app_name} is not running. Cannot execute '{command}'."
+                self.logger.warning(msg)
+                return False, msg
+
+            script = ""
+            if command == "play":
+                if track_or_playlist:
+                    if target_player_app_name == "Spotify":
+                        if "spotify:" in track_or_playlist: # URI for track, album, playlist
+                            script = f'tell application "Spotify" to play track "{track_or_playlist}"'
+                        else: # Assume it's a song or playlist name
+                            # Playing by name is complex, Spotify's AppleScript is better with URIs.
+                            # This is a very simplified attempt, likely to fail for non-URI.
+                            script = f'tell application "Spotify" to play track "{track_or_playlist}"'
+                            self.logger.warning(f"Playing '{track_or_playlist}' by name on Spotify (macOS) is unreliable via AppleScript; URI preferred. Attempting anyway.")
+                    elif target_player_app_name == "Music":
+                        # Playing specific track/playlist by name in Music app is also non-trivial.
+                        # Example: `play (first track of playlist "My Favs" whose name is "Cool Song")`
+                        script = f'tell application "Music" to play playlist "{track_or_playlist}"' # Simplified to playlist
+                        self.logger.info(f"Attempting to play playlist '{track_or_playlist}' in Music app on macOS. Playing specific tracks by name is more complex.")
+                if not script: # General play, or play after attempting specific track
+                    script = f'tell application "{target_player_app_name}" to play'
+            elif command == "pause":
+                script = f'tell application "{target_player_app_name}" to pause'
+            elif command == "next":
+                script = f'tell application "{target_player_app_name}" to next track'
+            elif command == "previous":
+                script = f'tell application "{target_player_app_name}" to previous track' # or 'back track' for Music for true previous
+
+            if script:
+                try:
+                    subprocess.run(["osascript", "-e", script], check=True, timeout=5, capture_output=True)
+                    msg = f"Executed '{command}' for {target_player_app_name} on macOS."
+                    self.logger.info(msg)
+                    return True, msg
+                except subprocess.TimeoutExpired:
+                    msg = f"Command '{command}' for {target_player_app_name} timed out on macOS."
+                    self.logger.error(msg)
+                    return False, msg
+                except subprocess.CalledProcessError as e:
+                    err_output = e.stderr.strip() if e.stderr else "No stderr output."
+                    msg = f"Error executing AppleScript for {target_player_app_name} (command: {command}). Error: {e}. Details: {err_output}"
+                    if "Application isn't running" in err_output:
+                         msg = f"{target_player_app_name} is not running or not responding."
+                         self.logger.warning(msg)
+                    else:
+                        self.logger.error(msg)
+                    return False, msg
+                except Exception as e: # Catch-all for other unexpected errors
+                    msg = f"Unexpected error with AppleScript for {target_player_app_name}: {e}"
+                    self.logger.error(msg)
                     return False, msg
             else:
-                msg = f"Player {player_name} not directly supported with AppleScript in this example."
+                msg = f"Command '{command}' not mapped to an AppleScript action for {target_player_app_name}."
                 self.logger.warning(msg)
                 return False, msg
 
-        # --- Linux Specific Examples (very basic, assuming CLI tools like playerctl) ---
-        elif os.name == 'posix': # Generic Linux
+        # --- Linux Specific Examples using playerctl ---
+        elif os.name == 'posix': # Generic Linux (already checked for osascript for macOS)
             if not shutil.which("playerctl"):
-                msg = "playerctl not found. Please install it to control media players on Linux."
-                self.logger.warning(msg)
+                msg = "`playerctl` not found. Please install it to control media players on Linux (e.g., `sudo apt install playerctl`)."
+                self.logger.error(msg) # Changed to error as it's a hard requirement for Linux
                 return False, msg
 
-            # Determine target player for playerctl. If 'default', playerctl might pick active or first available.
-            # Specific player names for playerctl might be 'spotify', 'vlc', etc.
-            playerctl_target = []
+            playerctl_target_args = []
             if player_lower != "default":
-                playerctl_target = ["-p", player_lower] # e.g. playerctl -p spotify play-pause
+                # playerctl can list players with `playerctl -l`. We could check if player_lower is valid.
+                # For now, assume user provides a valid player name if not "default".
+                playerctl_target_args = ["--player", player_lower] # e.g. playerctl --player spotify status
 
-            base_cmd = ["playerctl"] + playerctl_target
+            # Check if any player or the specified player is available/running
+            try:
+                status_cmd = ["playerctl"] + playerctl_target_args + ["status"]
+                status_process = subprocess.run(status_cmd, capture_output=True, text=True, check=True, timeout=2)
+                player_status = status_process.stdout.strip().lower()
+                self.logger.info(f"Playerctl status for '{player_lower}': {player_status}")
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+                # This often means no player is running or the specified one isn't available via MPRIS
+                # 'No players found' or 'Failed to connect to player' are common errors from playerctl
+                err_msg = e.stderr.strip() if isinstance(e, subprocess.CalledProcessError) and e.stderr else str(e)
+                if "no players found" in err_msg.lower() or "failed to connect" in err_msg.lower():
+                    msg = f"No active media player found or '{player_lower}' is not available via playerctl. Cannot execute '{command}'."
+                    self.logger.warning(msg)
+                else:
+                    msg = f"Could not get status for '{player_lower}' via playerctl. Error: {err_msg}. Cannot execute '{command}'."
+                    self.logger.warning(msg)
+                return False, msg # Can't proceed if player isn't controllable
+
+
+            base_cmd = ["playerctl"] + playerctl_target_args
             action_cmd_str = ""
 
             if command == "play":
-                action_cmd_str = "play-pause" # playerctl play-pause toggles. Use "play" to ensure playing.
-                if track_or_playlist: # playerctl can open URIs
+                if track_or_playlist: # playerctl can open URIs or search terms (depending on player)
                      try:
-                        subprocess.run(base_cmd + ["open", track_or_playlist], check=True, timeout=5)
-                        subprocess.run(base_cmd + ["play"], check=True, timeout=5) # Ensure it plays after opening
-                        msg = f"Attempted to open and play '{track_or_playlist}' with {player_lower if player_lower != 'default' else 'default player'} via playerctl."
+                        # playerctl open URI ; playerctl play
+                        # Some players might need specific handling for search terms vs URIs.
+                        # Assuming track_or_playlist is a URI for simplicity here.
+                        subprocess.run(base_cmd + ["open", track_or_playlist], check=True, timeout=5, capture_output=True)
+                        subprocess.run(base_cmd + ["play"], check=True, timeout=5, capture_output=True) # Ensure it plays after opening
+                        msg = f"Attempted to open and play '{track_or_playlist}' with '{player_lower}' via playerctl."
                         self.logger.info(msg)
                         return True, msg
-                     except Exception as e:
-                        msg = f"Error opening/playing '{track_or_playlist}' with playerctl: {e}"
+                     except subprocess.CalledProcessError as e:
+                        err_output = e.stderr.strip() if e.stderr else "No stderr output."
+                        msg = f"Error opening/playing '{track_or_playlist}' with playerctl for '{player_lower}'. Error: {e}. Details: {err_output}"
                         self.logger.error(msg)
                         return False, msg
-                else: # Just play/pause
-                    action_cmd_str = "play" # More explicit
+                     except subprocess.TimeoutExpired:
+                        msg = f"Timeout opening/playing '{track_or_playlist}' with playerctl for '{player_lower}'."
+                        self.logger.error(msg)
+                        return False, msg
+                else:
+                    action_cmd_str = "play" # Explicit play
             elif command == "pause":
                 action_cmd_str = "pause"
             elif command == "next":
@@ -124,37 +213,52 @@ class MediaController:
 
             if action_cmd_str:
                 try:
-                    subprocess.run(base_cmd + [action_cmd_str], check=True, timeout=5)
-                    msg = f"Executed '{action_cmd_str}' for {player_lower if player_lower != 'default' else 'default player'} via playerctl on Linux."
+                    subprocess.run(base_cmd + [action_cmd_str], check=True, timeout=5, capture_output=True)
+                    msg = f"Executed '{action_cmd_str}' for '{player_lower}' via playerctl on Linux."
                     self.logger.info(msg)
                     return True, msg
                 except subprocess.TimeoutExpired:
-                    msg = f"Command '{action_cmd_str}' for {player_lower} timed out with playerctl."
+                    msg = f"Command '{action_cmd_str}' for '{player_lower}' timed out with playerctl."
                     self.logger.error(msg)
                     return False, msg
-                except Exception as e:
-                    msg = f"Error using playerctl for {player_lower} on Linux: {e}"
+                except subprocess.CalledProcessError as e:
+                    err_output = e.stderr.strip() if e.stderr else "No stderr output."
+                    msg = f"Error using playerctl for '{player_lower}' (command: {action_cmd_str}). Error: {e}. Details: {err_output}"
                     self.logger.error(msg)
                     return False, msg
-            else:
-                msg = f"Command '{command}' not directly supported with playerctl in this example."
-                self.logger.warning(msg)
-                return False, msg
+                except Exception as e: # Catch-all
+                    msg = f"Unexpected error with playerctl for '{player_lower}': {e}"
+                    self.logger.error(msg)
+                    return False, msg
 
-        # --- Windows Specific (very basic, if player has CLI) ---
+            else: # If command was 'play' with track_or_playlist, it's handled above.
+                  # This 'else' implies command was not mapped if it wasn't play with track.
+                if not (command == "play" and track_or_playlist):
+                    msg = f"Command '{command}' not directly mapped for playerctl in this scenario."
+                    self.logger.warning(msg)
+                    return False, msg
+                # If it was play with track_or_playlist, success/failure already returned.
+                # This path shouldn't be hit if play with track_or_playlist was processed.
+                return True, "Play with track/playlist processed."
+
+
+        # --- Windows Specific (Placeholder) ---
         elif os.name == 'nt':
-            msg = f"Direct CLI control for '{player_name}' on Windows is often limited or player-specific. This function is a placeholder for Windows."
+            # Windows media control is complex without dedicated APIs or third-party tools.
+            # Common methods involve simulating media keys, which is beyond simple subprocess.
+            # For specific apps like Spotify, their Web API is the most reliable.
+            msg = (f"Direct CLI control for '{player_name}' on Windows is not reliably supported by this module. "
+                   "Consider using specific player APIs (e.g., Spotify Web API) or tools that simulate media key presses.")
             self.logger.warning(msg)
-            if player_lower == "spotify":
-                msg += " For Spotify on Windows, consider third-party tools or its Web API for robust control."
-            return False, msg # Placeholder, as generic CLI is unreliable
+            return False, msg
 
-        msg = f"Unsupported OS or player for direct CLI command: {os.name}, {player_name}"
-        self.logger.warning(msg)
+        # Fallback if OS not matched or other issue
+        msg = f"Media control for OS '{os.name}' and player '{player_name}' is not supported or failed."
+        self.logger.error(msg) # Changed to error as it's a failure point
         return False, msg
 
     def _is_player_running_macos(self, app_name: str) -> bool:
-        """Checks if a player is running on macOS."""
+        """Checks if a player application is running on macOS."""
         try:
             # Count processes with the given name
             script = f'tell application "System Events" to count processes whose name is "{app_name}"'
