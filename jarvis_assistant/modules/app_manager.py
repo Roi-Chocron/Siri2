@@ -27,6 +27,7 @@ class AppManager:
             "chrome": "chrome.exe" if os.name == 'nt' else "google-chrome", # google-chrome on Linux
             "firefox": "firefox.exe" if os.name == 'nt' else "firefox",
             "vscode": "code.exe" if os.name == 'nt' else "code",
+            "browser": "chrome.exe" if os.name == 'nt' else "google-chrome", # Default browser to chrome
             "explorer": "explorer.exe", # Windows File Explorer
             "finder": "Finder.app", # macOS Finder (special handling)
             "textedit": "TextEdit.app", # macOS
@@ -49,6 +50,14 @@ class AppManager:
         """
         app_name_lower = app_name.lower()
         self.logger.debug(f"Attempting to find path for app: '{app_name}'")
+
+        # Handle special cases like "Microsoft Store" first
+        if app_name_lower == "microsoft store":
+            self.logger.info("Opening Microsoft Store is complex and may require specific shell commands not generically implemented. User should use 'explorer.exe shell:AppsFolder' or configure a shortcut if needed.")
+            # Returning None will trigger the "could not find path" warning, which is appropriate.
+            # Or, we could return a special marker or handle it in open_app, but for now, let _find_app_path fail.
+            # For a slightly better UX, we can prevent further searching if it's a known complex case.
+            return None # This will lead to the standard "Could not automatically find path" warning.
 
         # 0. If app_name itself is an existing path (absolute or relative to cwd)
         if os.path.exists(app_name):
