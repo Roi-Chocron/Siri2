@@ -1,0 +1,13 @@
+google-generativeai
+SpeechRecognition
+pyttsx3
+# For screen brightness - will choose one based on OS or a cross-platform one if available
+# screen_brightness_control (Windows, Linux)
+# For volume control - will choose one based on OS or a cross-platform one if available
+# pycaw (Windows)
+psutil
+selenium
+beautifulsoup4
+lxml
+requests
+keyring
