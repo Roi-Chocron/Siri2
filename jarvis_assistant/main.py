@@ -18,16 +18,17 @@ def handle_os_interaction(os_agent: OSInteraction, intent: str, entities: dict) 
     response_message = "Sorry, I couldn't perform that OS action." # Default error
     success = False
 
-    if intent == "create_text_file":
+    if intent == "create_file":
         filepath = entities.get("filepath")
         content = entities.get("content", "")
+        file_type = entities.get("file_type", "txt") # Default to txt
         if filepath:
             # Make paths relative to user's home directory if not absolute
             if not os.path.isabs(filepath):
                 filepath = os.path.expanduser(os.path.join("~", filepath))
-            success, response_message = os_agent.create_text_file(filepath, content)
+            success, response_message = os_agent.create_file(filepath, content, file_type)
         else:
-            response_message = "I need a filepath to create a text file."
+            response_message = "I need a filepath to create a file."
 
     elif intent == "create_directory":
         dir_path = entities.get("dir_path")
@@ -150,14 +151,32 @@ def main_loop():
     try:
         while True:
             logger.info("Starting new listening cycle.")
-            # Allow for text input as well for debugging or environments without mic
-            command_input_method = "text"
-            if command_input_method == "voice":
-                text_command = recognizer.listen()
-            else:
-                text_command = input("Enter command: ")
+            # Default to voice input. Text input can be a fallback or configurable option.
+            # For now, we'll set it directly to "voice".
+            # A more advanced setup might use a config variable from config.py
+            command_input_method = "voice" # Defaulting to voice
 
-            if text_command:
+            text_command = None
+            if command_input_method == "voice":
+                logger.info("Listening for voice command...")
+                text_command = recognizer.listen()
+                if text_command:
+                    logger.info(f"Voice command received: {text_command}")
+                else:
+                    logger.info("No voice command detected or error in recognition.")
+                    # Potentially speak "didn't catch that" or just loop
+                    # For now, if listen() returns None (error/silence), we just loop.
+                    # The recognizer.listen() should handle logging its own errors.
+                    continue # Skip processing if no command heard
+            else: # Text input mode
+                try:
+                    text_command = input("Enter command: ")
+                except EOFError: # Handle Ctrl+D or similar that might close input stream
+                    logger.info("EOF received, treating as exit command.")
+                    text_command = "exit jarvis"
+
+
+            if text_command: # Proceed only if a command was actually received
                 logger.info(f"Recognized command: {text_command}")
                 tts.speak(f"Processing: {text_command}")
 
@@ -183,7 +202,7 @@ def main_loop():
 
                 # OS Interaction Intents
                 elif intent in [
-                    "create_text_file", "create_directory", "delete_path",
+                    "create_file", "create_directory", "delete_path", # Updated create_text_file to create_file
                     "move_path", "list_directory_contents", "execute_command",
                     "set_brightness", "set_volume"
                 ]:

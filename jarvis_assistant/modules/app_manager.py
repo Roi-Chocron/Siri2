@@ -3,74 +3,154 @@ import os
 import shutil # Required for shutil.which
 import subprocess
 import psutil
+from jarvis_assistant.utils.logger import get_logger
+from jarvis_assistant.config import USER_APP_PATHS # Import user-defined app paths
+
+# Ensure get_logger can be found if this module is run standalone for testing
+if __name__ == '__main__' and __package__ is None:
+    import sys
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    from jarvis_assistant.utils.logger import get_logger
+    from jarvis_assistant.config import USER_APP_PATHS
+
 
 class AppManager:
     def __init__(self):
-        # Potential: Load a map of common app names to their executable paths from config
-        self.app_map = {
+        self.logger = get_logger(self.__class__.__name__)
+        # Default common app names to their typical executable names.
+        # This map can be overridden or extended by USER_APP_PATHS from config.py
+        self.default_app_map = {
             "notepad": "notepad.exe",
-            "calculator": "calc.exe",
-            "chrome": "chrome.exe", # This might need full path on some systems
-            "firefox": "firefox.exe", # This might need full path
-            # Add more common apps
+            "calculator": "calc.exe", # Windows specific, might need OS check
+            "chrome": "chrome.exe" if os.name == 'nt' else "google-chrome", # google-chrome on Linux
+            "firefox": "firefox.exe" if os.name == 'nt' else "firefox",
+            "vscode": "code.exe" if os.name == 'nt' else "code",
+            "explorer": "explorer.exe", # Windows File Explorer
+            "finder": "Finder.app", # macOS Finder (special handling)
+            "textedit": "TextEdit.app", # macOS
+            "gedit": "gedit", # Linux
+            # Add more common apps with OS considerations
         }
-        # On Windows, ProgramFiles and ProgramFiles(x86) are common locations
-        # On macOS, /Applications/
-        # On Linux, usually apps are in PATH
+
+        # Combine default map with user-configured paths. User paths take precedence.
+        self.app_map = {**self.default_app_map, **USER_APP_PATHS}
+        self.logger.info(f"AppManager initialized. Combined app map: {self.app_map}")
+
 
     def _find_app_path(self, app_name: str) -> str | None:
-        """Tries to find the executable path for an application."""
+        """
+        Tries to find the executable path for an application using a multi-step approach:
+        1. Check if app_name is a direct path and exists.
+        2. Check the combined app_map (defaults + user config).
+        3. Check if app_name (or with .exe) is in PATH.
+        4. Perform OS-specific searches in common installation locations.
+        """
         app_name_lower = app_name.lower()
+        self.logger.debug(f"Attempting to find path for app: '{app_name}'")
 
-        # 1. Check common names map
-        if app_name_lower in self.app_map:
-            # Check if it's directly runnable (in PATH) or if it's a full path
-            if os.path.exists(self.app_map[app_name_lower]) or shutil.which(self.app_map[app_name_lower]):
-                 return self.app_map[app_name_lower]
+        # 0. If app_name itself is an existing path (absolute or relative to cwd)
+        if os.path.exists(app_name):
+            self.logger.debug(f"Found '{app_name}' as a direct existing path.")
+            return os.path.abspath(app_name)
 
-        # 2. Check if app_name itself is an executable in PATH
-        if shutil.which(app_name):
-            return app_name
-        if shutil.which(app_name + ".exe"): # For windows convenience
-            return app_name + ".exe"
+        # 1. Check combined app_map (user-defined paths first, then defaults)
+        # User paths in USER_APP_PATHS from config.py might be aliases or full paths.
+        # Default app_map also contains aliases to common executables.
 
-        # 3. Platform-specific searches (very basic examples)
-        # This part would need to be more robust for a real application
+        # Check app_name_lower first, then original app_name for case sensitivity in map keys
+        mapped_path_keys = [app_name_lower, app_name]
+        for key in mapped_path_keys:
+            if key in self.app_map:
+                path_from_map = self.app_map[key]
+                self.logger.debug(f"Found '{key}' in app_map: '{path_from_map}'")
+                # If the mapped path is already absolute and exists, use it
+                if os.path.isabs(path_from_map) and os.path.exists(path_from_map):
+                    return path_from_map
+                # If it's not absolute, try finding it with shutil.which (treat as command/exe name)
+                found_via_which = shutil.which(path_from_map)
+                if found_via_which:
+                    self.logger.debug(f"Path from map '{path_from_map}' found in PATH: '{found_via_which}'")
+                    return found_via_which
+                # If it was a name like "chrome.exe" and not found by which, it might be a relative path error or missing
+                self.logger.debug(f"Path from map '{path_from_map}' for key '{key}' not found directly or in PATH.")
+
+
+        # 2. Check if app_name (or app_name.exe for Windows) is an executable in PATH
+        found_in_path = shutil.which(app_name)
+        if found_in_path:
+            self.logger.debug(f"Found '{app_name}' in PATH: '{found_in_path}'")
+            return found_in_path
+        if os.name == 'nt' and not app_name.endswith(".exe"): # Windows convenience: try adding .exe
+            found_in_path_exe = shutil.which(app_name + ".exe")
+            if found_in_path_exe:
+                self.logger.debug(f"Found '{app_name}.exe' in PATH: '{found_in_path_exe}'")
+                return found_in_path_exe
+
+        # 3. Platform-specific searches in common installation locations
+        # These are heuristics and might not cover all cases.
         if os.name == 'nt': # Windows
-            common_paths = [
-                os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), app_name, app_name + ".exe"),
-                os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), app_name, app_name + ".exe"),
-                os.path.join(os.environ.get("LocalAppData", ""), "Programs", app_name, app_name + ".exe")
-            ]
-            for path_to_check in common_paths:
+            # Search in Program Files, Program Files (x86), LocalAppData
+            prog_files = [os.environ.get("ProgramFiles", "C:\\Program Files"),
+                          os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")]
+            local_app_data = os.environ.get("LocalAppData", "")
+
+            # Common patterns: ProgFiles\AppName\AppName.exe or ProgFiles\Vendor\AppName\AppName.exe
+            # Check for app_name as a directory containing app_name.exe
+            for base_path in prog_files:
+                path_to_check = os.path.join(base_path, app_name, app_name + ".exe")
                 if os.path.exists(path_to_check):
+                    self.logger.debug(f"Found in common Windows path: {path_to_check}")
                     return path_to_check
-            # Search for apps installed via Microsoft Store (more complex)
-            # Example: C:\Program Files\WindowsApps\Microsoft.WindowsCalculator_11.2311.0.0_x64__8wekyb3d8bbwe\CalculatorApp.exe
+
+            # Check common vendor folders (e.g., Google for Chrome) - this is very heuristic
+            # A more robust way would be to check Windows Registry for installed apps, which is complex.
+            # Example: os.path.join(prog_files[0], "Google", "Chrome", "Application", "chrome.exe")
+
+            if local_app_data:
+                path_to_check = os.path.join(local_app_data, "Programs", app_name, app_name + ".exe")
+                if os.path.exists(path_to_check):
+                     self.logger.debug(f"Found in LocalAppData: {path_to_check}")
+                     return path_to_check
+
+            # Placeholder: Search for apps installed via Microsoft Store (very complex, involves PowerShell or registry)
+            # self.logger.debug("Windows Store app path finding not yet implemented.")
 
         elif os.name == 'posix': # macOS or Linux
-            if shutil.which(app_name_lower): # Check PATH again for lowercase
+            if shutil.which(app_name_lower): # Check PATH again for lowercase if original check missed
+                self.logger.debug(f"Found '{app_name_lower}' in PATH (second check).")
                 return app_name_lower
-            # macOS specific
-            mac_path = f"/Applications/{app_name}.app/Contents/MacOS/{app_name}"
-            if os.path.exists(mac_path):
-                return mac_path
-            mac_path_alt = f"/Applications/{app_name.capitalize()}.app/Contents/MacOS/{app_name.capitalize()}"
-            if os.path.exists(mac_path_alt):
-                return mac_path_alt
 
-        print(f"Could not automatically find path for '{app_name}'. User might need to specify full path or add to app_map.")
+            # macOS specific: /Applications/AppName.app or /Applications/AppName.app/Contents/MacOS/AppName
+            if sys.platform == 'darwin': # macOS
+                # Try common variations like "Google Chrome.app"
+                variations = [app_name, app_name.capitalize(), app_name.title()]
+                for variation in variations:
+                    mac_app_bundle_path = f"/Applications/{variation}.app"
+                    if os.path.exists(mac_app_bundle_path):
+                        self.logger.debug(f"Found macOS app bundle: {mac_app_bundle_path}")
+                        # For `open` command, the .app path is usually sufficient.
+                        # If direct executable needed:
+                        # executable_path = os.path.join(mac_app_bundle_path, "Contents", "MacOS", variation.split('.')[0])
+                        # if os.path.exists(executable_path): return executable_path
+                        return mac_app_bundle_path # Return .app path for 'open' command
+
+        self.logger.warning(f"Could not automatically find path for '{app_name}'. User might need to specify full path or add to USER_APP_PATHS in config.")
         return None
 
 
     def open_app(self, app_name_or_path: str) -> bool:
-        """Opens an application by its name or full path."""
+        """Opens an application by its name, alias from config, or full path."""
         app_path = self._find_app_path(app_name_or_path)
-        if not app_path and os.path.exists(app_name_or_path): # If raw path was given and it exists
-            app_path = app_name_or_path
+
+        # If _find_app_path didn't find it, but app_name_or_path itself is a valid path (e.g. user provided full path)
+        if not app_path and os.path.exists(app_name_or_path):
+            app_path = os.path.abspath(app_name_or_path)
+            self.logger.info(f"Using provided path directly: {app_path}")
 
         if not app_path:
-            print(f"Application '{app_name_or_path}' not found or path could not be determined.")
+            self.logger.error(f"Application '{app_name_or_path}' not found or path could not be determined.")
             return False
 
         try:

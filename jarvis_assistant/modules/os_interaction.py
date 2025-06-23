@@ -85,52 +85,67 @@ class OSInteraction:
             self.logger.error(message)
             return False, message
 
-    def create_text_file(self, filepath: str, content: str = "") -> tuple[bool, str]:
-        """Creates a text file with the given content."""
+    def create_file(self, filepath: str, content: str = "", file_type: str = "txt") -> tuple[bool, str]:
+        """
+        Creates a file with the given content.
+        For 'document', it creates a .txt file but logs it as a document placeholder.
+        For 'spreadsheet', it creates a .csv file but logs it as a spreadsheet placeholder.
+        Actual .docx or .xlsx creation would require dedicated libraries.
+        """
         try:
             # Ensure the directory exists for the file
             dir_name = os.path.dirname(filepath)
-            if dir_name: # If filepath includes a directory
+            if dir_name:  # If filepath includes a directory
                 os.makedirs(dir_name, exist_ok=True)
 
-            with open(filepath, 'w') as f:
+            actual_filepath = filepath
+            if file_type == "document":
+                # For now, create as .txt, but acknowledge it's a document.
+                if not actual_filepath.endswith((".txt", ".md", ".rtf")): # basic text-based doc types
+                    actual_filepath += ".txt"
+                self.logger.info(f"Creating document (as text file): {actual_filepath}")
+                # Future: use python-docx or similar for real .docx files.
+                # from docx import Document
+                # document = Document()
+                # document.add_paragraph(content)
+                # document.save(actual_filepath)
+            elif file_type == "spreadsheet":
+                # For now, create as .csv if content is suitable, or .txt
+                if not actual_filepath.endswith((".csv", ".tsv")):
+                    actual_filepath += ".csv"
+                self.logger.info(f"Creating spreadsheet (as CSV): {actual_filepath}")
+                # Future: use openpyxl or similar for real .xlsx files.
+                # For CSV, content should ideally be structured (e.g., comma-separated strings)
+                # For simplicity, just writing raw content.
+            else: # Default to text file (.txt)
+                if "." not in os.path.basename(actual_filepath): # Add .txt if no extension
+                    actual_filepath += ".txt"
+                self.logger.info(f"Creating text file: {actual_filepath}")
+
+            with open(actual_filepath, 'w', encoding='utf-8') as f:
                 f.write(content)
-            message = f"File created: {filepath}"
+
+            message = f"{file_type.capitalize()} file created: {actual_filepath}"
+            if actual_filepath != filepath:
+                message += f" (requested as {filepath})"
             self.logger.info(message)
             return True, message
         except Exception as e:
-            message = f"Error creating file {filepath}: {e}"
+            message = f"Error creating file {filepath} (type: {file_type}): {e}"
             self.logger.error(message)
             return False, message
 
-    # Placeholder for document/spreadsheet creation - will require specific libraries
-    def create_document_file(self, filepath: str, content: str = "") -> tuple[bool, str]:
-        message = f"Placeholder: Create document {filepath} with content: '{content[:50]}...'"
-        self.logger.info(message)
-        # Example: using python-docx
-        # from docx import Document
-        # document = Document()
-        # document.add_paragraph(content)
-        # document.save(filepath)
-        return True, message
+    def execute_command(self, command: str, shell_type: str = None) -> tuple[bool, str]:
+        """
+        Executes a command.
+        Determines shell_type if not provided (cmd for Windows, sh for POSIX).
+        Handles multi-line commands for PowerShell and POSIX shells.
+        """
+        if shell_type is None:
+            shell_type = "cmd" if os.name == 'nt' else "sh"
+        shell_type = shell_type.lower()
 
-    def create_spreadsheet_file(self, filepath: str, data: list = None) -> tuple[bool, str]:
-        message = f"Placeholder: Create spreadsheet {filepath}"
-        self.logger.info(message)
-        # Example: using openpyxl
-        # from openpyxl import Workbook
-        # wb = Workbook()
-        # sheet = wb.active
-        # if data:
-        #     for row_idx, row_data in enumerate(data, 1):
-        #         for col_idx, cell_value in enumerate(row_data, 1):
-        #             sheet.cell(row=row_idx, column=col_idx, value=cell_value)
-        # wb.save(filepath)
-        return True, message
-
-    def execute_command(self, command: str, shell_type: str = "cmd") -> tuple[bool, str]:
-        """Executes a command in CMD or PowerShell."""
-        self.logger.info(f"Attempting to execute {shell_type} command: {command}")
+        self.logger.info(f"Attempting to execute {shell_type} command: {command[:200]}{'...' if len(command) > 200 else ''}")
         try:
             if os.name == 'nt': # Windows specific handling for shell=True safety
                 if shell_type.lower() == "powershell":
