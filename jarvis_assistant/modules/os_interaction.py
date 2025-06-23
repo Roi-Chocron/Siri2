@@ -24,6 +24,8 @@ class OSInteraction:
 
     def create_directory(self, dir_path: str) -> tuple[bool, str]:
         """Creates a directory."""
+        # Expand environment variables like %USERNAME% or %USERPROFILE%
+        dir_path = os.path.expandvars(dir_path)
         try:
             os.makedirs(dir_path, exist_ok=True)
             message = f"Directory created or already exists: {dir_path}"

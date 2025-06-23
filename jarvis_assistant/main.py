@@ -151,11 +151,11 @@ def main_loop():
         while True:
             logger.info("Starting new listening cycle.")
             # Allow for text input as well for debugging or environments without mic
-            # command_input_method = "voice" # or "text"
-            # if command_input_method == "voice":
-            text_command = recognizer.listen()
-            # else:
-            #     text_command = input("Enter command: ")
+            command_input_method = "text"
+            if command_input_method == "voice":
+                text_command = recognizer.listen()
+            else:
+                text_command = input("Enter command: ")
 
             if text_command:
                 logger.info(f"Recognized command: {text_command}")

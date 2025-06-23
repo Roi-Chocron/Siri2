@@ -1,0 +1,16 @@
+2025-06-23 04:16:53,702 - JARVIS_Main - INFO - J.A.R.V.I.S. Assistant Initializing...
+2025-06-23 04:16:54,008 - comtypes.client._code_cache - INFO - Imported existing <module 'comtypes.gen' from 'C:\\Users\\roich\\OneDrive\\מסמכים\\Siri2\\.venv\\Lib\\site-packages\\comtypes\\gen\\__init__.py'>
+2025-06-23 04:16:54,009 - comtypes.client._code_cache - INFO - Using writeable comtypes cache directory: 'C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\comtypes\gen'
+2025-06-23 04:16:54,145 - CommandParser - INFO - CommandParser initialized with Gemini model.
+2025-06-23 04:16:54,146 - JARVIS_Main - INFO - Core components initialized.
+2025-06-23 04:16:57,046 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:17:03,396 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:17:09,626 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:17:15,960 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:17:22,301 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:17:29,083 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:17:34,692 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:17:40,944 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:17:46,129 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:17:50,561 - JARVIS_Main - INFO - User interrupted the main loop. Shutting down.
+2025-06-23 04:17:53,351 - JARVIS_Main - INFO - J.A.R.V.I.S. Assistant shutting down.

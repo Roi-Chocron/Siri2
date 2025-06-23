@@ -1,0 +1,97 @@
+2025-06-23 04:18:29,303 - JARVIS_Main - INFO - J.A.R.V.I.S. Assistant Initializing...
+2025-06-23 04:18:29,572 - comtypes.client._code_cache - INFO - Imported existing <module 'comtypes.gen' from 'C:\\Users\\roich\\OneDrive\\מסמכים\\Siri2\\.venv\\Lib\\site-packages\\comtypes\\gen\\__init__.py'>
+2025-06-23 04:18:29,573 - comtypes.client._code_cache - INFO - Using writeable comtypes cache directory: 'C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\comtypes\gen'
+2025-06-23 04:18:29,736 - CommandParser - INFO - CommandParser initialized with Gemini model.
+2025-06-23 04:18:29,736 - JARVIS_Main - INFO - Core components initialized.
+2025-06-23 04:18:32,734 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:18:36,532 - JARVIS_Main - INFO - Recognized command: HI
+2025-06-23 04:18:39,483 - CommandParser - ERROR - Error parsing command with LLM: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+Traceback (most recent call last):
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\jarvis_assistant\core\command_parser.py", line 104, in parse_command
+    response = self.model.generate_content(
+        prompt,
+        generation_config=generation_config
+    )
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\generativeai\generative_models.py", line 331, in generate_content
+    response = self._client.generate_content(
+        request,
+        **request_options,
+    )
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\ai\generativelanguage_v1beta\services\generative_service\client.py", line 835, in generate_content
+    response = rpc(
+        request,
+    ...<2 lines>...
+        metadata=metadata,
+    )
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\gapic_v1\method.py", line 131, in __call__
+    return wrapped_func(*args, **kwargs)
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\retry\retry_unary.py", line 294, in retry_wrapped_func
+    return retry_target(
+        target,
+    ...<3 lines>...
+        on_error=on_error,
+    )
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\retry\retry_unary.py", line 156, in retry_target
+    next_sleep = _retry_error_helper(
+        exc,
+    ...<6 lines>...
+        timeout,
+    )
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\retry\retry_base.py", line 214, in _retry_error_helper
+    raise final_exc from source_exc
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\retry\retry_unary.py", line 147, in retry_target
+    result = target()
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\timeout.py", line 130, in func_with_timeout
+    return func(*args, **kwargs)
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\grpc_helpers.py", line 78, in error_remapped_callable
+    raise exceptions.from_grpc_error(exc) from exc
+google.api_core.exceptions.NotFound: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-06-23 04:18:39,491 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'unknown', 'entities': {'error': 'An unexpected error occurred: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.'}}
+2025-06-23 04:18:39,492 - JARVIS_Main - INFO - Response to user: I'm not sure how to handle that command. Could you try rephrasing? (Parser error: An unexpected error occurred: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.)
+2025-06-23 04:18:57,683 - JARVIS_Main - INFO - Starting new listening cycle.
+2025-06-23 04:20:16,768 - JARVIS_Main - INFO - Recognized command: Hi
+2025-06-23 04:20:19,644 - CommandParser - ERROR - Error parsing command with LLM: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+Traceback (most recent call last):
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\jarvis_assistant\core\command_parser.py", line 104, in parse_command
+    response = self.model.generate_content(
+        prompt,
+        generation_config=generation_config
+    )
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\generativeai\generative_models.py", line 331, in generate_content
+    response = self._client.generate_content(
+        request,
+        **request_options,
+    )
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\ai\generativelanguage_v1beta\services\generative_service\client.py", line 835, in generate_content
+    response = rpc(
+        request,
+    ...<2 lines>...
+        metadata=metadata,
+    )
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\gapic_v1\method.py", line 131, in __call__
+    return wrapped_func(*args, **kwargs)
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\retry\retry_unary.py", line 294, in retry_wrapped_func
+    return retry_target(
+        target,
+    ...<3 lines>...
+        on_error=on_error,
+    )
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\retry\retry_unary.py", line 156, in retry_target
+    next_sleep = _retry_error_helper(
+        exc,
+    ...<6 lines>...
+        timeout,
+    )
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\retry\retry_base.py", line 214, in _retry_error_helper
+    raise final_exc from source_exc
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\retry\retry_unary.py", line 147, in retry_target
+    result = target()
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\timeout.py", line 130, in func_with_timeout
+    return func(*args, **kwargs)
+  File "C:\Users\roich\OneDrive\מסמכים\Siri2\.venv\Lib\site-packages\google\api_core\grpc_helpers.py", line 78, in error_remapped_callable
+    raise exceptions.from_grpc_error(exc) from exc
+google.api_core.exceptions.NotFound: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-06-23 04:20:19,651 - JARVIS_Main - INFO - LLM parsed action: {'intent': 'unknown', 'entities': {'error': 'An unexpected error occurred: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.'}}
+2025-06-23 04:20:19,652 - JARVIS_Main - INFO - Response to user: I'm not sure how to handle that command. Could you try rephrasing? (Parser error: An unexpected error occurred: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.)
+2025-06-23 04:20:23,784 - JARVIS_Main - INFO - User interrupted the main loop. Shutting down.
+2025-06-23 04:20:23,785 - JARVIS_Main - INFO - J.A.R.V.I.S. Assistant shutting down.

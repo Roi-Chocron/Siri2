@@ -26,8 +26,8 @@ class CommandParser:
         # but we can instruct it to output JSON via prompt.
         # If using a model version that explicitly supports JSON output type, that's better.
         # For now, we'll use prompt engineering for JSON.
-        self.model = genai.GenerativeModel('gemini-pro')
-        self.logger.info("CommandParser initialized with Gemini model.")
+        self.model = genai.GenerativeModel('models/gemini-1.5-flash')
+        self.logger.info("CommandParser initialized with Gemini model models/gemini-1.5-flash.")
 
     def _build_prompt(self, text_command: str) -> str:
         # This prompt needs to be carefully crafted and tested.
