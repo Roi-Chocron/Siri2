@@ -241,18 +241,32 @@ def main_loop():
             # command_input_method = "voice" # Defaulting to voice
 
             command_input_method = ""
+            user_command_after_choice = None # To store any extraneous input after 's' or 't'
             while command_input_method not in ['s', 't']:
                 try:
                     # Prompting in the console, not via TTS, as this is a pre-command setup
-                    raw_choice = input("Choose input method: Speak (s) or Type (t), then press Enter: ").lower()
-                    if raw_choice in ['s', 't']:
-                        command_input_method = raw_choice
+                    raw_input_str = input("Choose input method: Speak (s) or Type (t), then press Enter: ").strip()
+                    if not raw_input_str: # Empty input
+                        print("No input received. Please enter 's' or 't'.")
+                        continue
+
+                    choice_char = raw_input_str[0].lower()
+
+                    if choice_char in ['s', 't']:
+                        command_input_method = choice_char
+                        # Check if there was more text after the choice, only relevant for 't'
+                        if len(raw_input_str) > 1 and command_input_method == 't':
+                            user_command_after_choice = raw_input_str[1:].strip()
+                            if not user_command_after_choice: # e.g. user typed "t "
+                                user_command_after_choice = None
                     else:
                         print("Invalid choice. Please enter 's' or 't'.")
                 except EOFError:
                     logger.info("EOF received during input mode selection, treating as exit.")
                     tts.speak("Exiting.")
                     return # Exit main_loop
+                except IndexError: # Catch if input was empty after strip
+                     print("No input received. Please enter 's' or 't'.")
 
 
             text_command = None
@@ -267,15 +281,19 @@ def main_loop():
                     tts.speak("I didn't catch that. Please try again.")
                     continue # Skip processing if no command heard
             else: # Text input mode (command_input_method == "t")
-                try:
-                    text_command = input("הקלד פקודה: ") # "Type command: " in Hebrew as per user log
-                except EOFError:
-                    logger.info("EOF received, treating as exit command.")
-                    text_command = "exit jarvis" # Or handle exit more directly
-                except KeyboardInterrupt:
-                    logger.info("Keyboard interrupt during text input, treating as exit.")
-                    tts.speak("Exiting.")
-                    return # Exit main_loop
+                if user_command_after_choice:
+                    text_command = user_command_after_choice
+                    logger.info(f"Using command from initial choice: {text_command}")
+                else:
+                    try:
+                        text_command = input("הקלד פקודה: ") # "Type command: " in Hebrew as per user log
+                    except EOFError:
+                        logger.info("EOF received, treating as exit command.")
+                        text_command = "exit jarvis" # Or handle exit more directly
+                    except KeyboardInterrupt:
+                        logger.info("Keyboard interrupt during text input, treating as exit.")
+                        tts.speak("Exiting.")
+                        return # Exit main_loop
 
             if text_command: # Proceed only if a command was actually received
                 logger.info(f"Recognized command: {text_command}")
