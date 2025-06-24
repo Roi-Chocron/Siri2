@@ -22,22 +22,59 @@ class AppManager:
         # Default common app names to their typical executable names.
         # This map can be overridden or extended by USER_APP_PATHS from config.py
         self.default_app_map = {
+            # Base map with lowercase keys for easier lookup
+            # Windows-centric initially, then adjusted for other OS
             "notepad": "notepad.exe",
-            "calculator": "calc.exe", # Windows specific, might need OS check
-            "chrome": "chrome.exe" if os.name == 'nt' else "google-chrome", # google-chrome on Linux
-            "firefox": "firefox.exe" if os.name == 'nt' else "firefox",
-            "vscode": "code.exe" if os.name == 'nt' else "code",
-            "browser": "chrome.exe" if os.name == 'nt' else "google-chrome", # Default browser to chrome
-            "explorer": "explorer.exe", # Windows File Explorer
-            "finder": "Finder.app", # macOS Finder (special handling)
-            "textedit": "TextEdit.app", # macOS
-            "gedit": "gedit", # Linux
-            # Add more common apps with OS considerations
+            "calculator": "calc.exe", # Command to launch calculator
+            "chrome": "chrome.exe",
+            "google chrome": "chrome.exe",
+            "firefox": "firefox.exe",
+            "mozilla firefox": "firefox.exe",
+            "edge": "msedge.exe",
+            "microsoft edge": "msedge.exe",
+            "browser": "msedge.exe", # Default browser to Edge on Windows
+            "explorer": "explorer.exe",
+            "file explorer": "explorer.exe",
+            "vscode": "code.exe",
+            "visual studio code": "code.exe",
+            "steam": "steam.exe", # For opening Steam client itself
+            # Common macOS apps (will be overridden if not on macOS)
+            "finder": "Finder.app",
+            "textedit": "TextEdit.app",
+            "safari": "Safari.app",
+            # Common Linux apps (will be overridden if not on Linux)
+            "gedit": "gedit",
         }
 
-        # Combine default map with user-configured paths. User paths take precedence.
-        self.app_map = {**self.default_app_map, **USER_APP_PATHS}
-        self.logger.info(f"AppManager initialized. Combined app map: {self.app_map}")
+        # OS-specific adjustments for executable names or different defaults
+        if os.name != 'nt':
+            self.default_app_map["chrome"] = "google-chrome"
+            self.default_app_map["google chrome"] = "google-chrome"
+            self.default_app_map["firefox"] = "firefox"
+            self.default_app_map["mozilla firefox"] = "firefox"
+            self.default_app_map["vscode"] = "code"
+            self.default_app_map["visual studio code"] = "code"
+            self.default_app_map["browser"] = "google-chrome" # Default for Linux
+            self.default_app_map.pop("explorer", None) # explorer.exe is Windows specific
+            self.default_app_map.pop("file explorer", None)
+            self.default_app_map.pop("edge", None) # msedge.exe is Windows specific
+            self.default_app_map.pop("microsoft edge", None)
+            self.default_app_map.pop("steam", None) # steam.exe is Windows specific, Linux has 'steam'
+
+            if sys.platform == 'darwin': # macOS specific overrides
+                self.default_app_map["browser"] = "Safari.app" # Or stick to chrome if preferred
+                self.default_app_map.pop("gedit", None) # gedit not default on macOS
+            else: # Linux (not darwin, not nt)
+                self.default_app_map.pop("finder", None)
+                self.default_app_map.pop("textedit", None)
+                self.default_app_map.pop("safari", None)
+                self.default_app_map["steam"] = "steam" # Linux command for steam
+
+        # User-configured paths (keys should also ideally be lowercase for consistency)
+        # We'll lowercase user keys when creating the final map.
+        user_app_paths_lower = {k.lower(): v for k, v in USER_APP_PATHS.items()}
+        self.app_map = {**self.default_app_map, **user_app_paths_lower}
+        self.logger.info(f"AppManager initialized. Combined app map (keys lowercased): {self.app_map}")
 
 
     def _find_app_path(self, app_name: str) -> str | None:
@@ -65,28 +102,33 @@ class AppManager:
             return os.path.abspath(app_name)
 
         # 1. Check combined app_map (user-defined paths first, then defaults)
-        # User paths in USER_APP_PATHS from config.py might be aliases or full paths.
-        # Default app_map also contains aliases to common executables.
+        # The self.app_map keys are now all lowercase due to initialization logic.
+        if app_name_lower in self.app_map:
+            path_from_map = self.app_map[app_name_lower]
+            self.logger.debug(f"Found '{app_name_lower}' in app_map, maps to: '{path_from_map}'")
 
-        # Check app_name_lower first, then original app_name for case sensitivity in map keys
-        mapped_path_keys = [app_name_lower, app_name]
-        for key in mapped_path_keys:
-            if key in self.app_map:
-                path_from_map = self.app_map[key]
-                self.logger.debug(f"Found '{key}' in app_map: '{path_from_map}'")
-                # If the mapped path is already absolute and exists, use it
-                if os.path.isabs(path_from_map) and os.path.exists(path_from_map):
-                    return path_from_map
-                # If it's not absolute, try finding it with shutil.which (treat as command/exe name)
-                found_via_which = shutil.which(path_from_map)
-                if found_via_which:
-                    self.logger.debug(f"Path from map '{path_from_map}' found in PATH: '{found_via_which}'")
-                    return found_via_which
-                # If it was a name like "chrome.exe" and not found by which, it might be a relative path error or missing
-                self.logger.debug(f"Path from map '{path_from_map}' for key '{key}' not found directly or in PATH.")
+            # If the mapped path is already an existing absolute path, use it directly.
+            if os.path.isabs(path_from_map) and os.path.exists(path_from_map):
+                self.logger.debug(f"Mapped path '{path_from_map}' is an existing absolute path.")
+                return path_from_map
+
+            # If not absolute, or absolute but not existing, treat path_from_map as an executable name
+            # and try to find it with shutil.which (searches PATH).
+            # This handles cases where app_map stores "msedge.exe" and shutil.which finds it.
+            found_via_which = shutil.which(path_from_map)
+            if found_via_which:
+                self.logger.debug(f"Mapped name '{path_from_map}' (treated as command) found in PATH by shutil.which: '{found_via_which}'")
+                return found_via_which
+
+            # If path_from_map was, for example, "C:\\NonExistent\\Path.exe" from USER_APP_PATHS,
+            # or "some_custom_command" not in PATH, it won't be found here.
+            # The subsequent heuristic search might still find it if it's a common app name in a standard location.
+            self.logger.debug(f"Mapped name '{path_from_map}' for key '{app_name_lower}' is not an existing absolute path and not found in PATH by shutil.which. Will proceed to other search methods.")
+        else:
+            self.logger.debug(f"'{app_name_lower}' not found in pre-defined app_map.")
 
 
-        # 2. Check if app_name (or app_name.exe for Windows) is an executable in PATH
+        # 2. Check if app_name itself (or app_name.exe for Windows) is an executable in PATH
         found_in_path = shutil.which(app_name)
         if found_in_path:
             self.logger.debug(f"Found '{app_name}' in PATH: '{found_in_path}'")
@@ -172,6 +214,17 @@ class AppManager:
             # Placeholder: Search for apps installed via Microsoft Store (very complex)
             # self.logger.debug("Windows Store app path finding not yet implemented.")
 
+            # Specific check for Microsoft Edge if not found by other means yet
+            if app_name_lower in ["edge", "microsoft edge"]:
+                edge_paths_to_try = [
+                    os.path.join(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"), "Microsoft\\Edge\\Application\\msedge.exe"),
+                    os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), "Microsoft\\Edge\\Application\\msedge.exe")
+                ]
+                for edge_path in edge_paths_to_try:
+                    if os.path.exists(edge_path):
+                        self.logger.info(f"Found Microsoft Edge at specific known path: {edge_path}")
+                        return edge_path
+
         elif os.name == 'posix': # macOS or Linux
             if shutil.which(app_name_lower): # Check PATH again for lowercase if original check missed
                 self.logger.debug(f"Found '{app_name_lower}' in PATH (second check).")
@@ -231,33 +284,90 @@ class AppManager:
 
     def close_app(self, app_name_or_exe: str) -> bool:
         """Closes an application by its name or executable name."""
-        # Normalize to common executable name if found in map, otherwise use as is
-        exe_name = self.app_map.get(app_name_or_exe.lower(), app_name_or_exe)
-        if not exe_name.lower().endswith(('.exe', '.app')) and '.' not in exe_name: # Heuristic for Windows
-            if os.name == 'nt':
-                 exe_name += ".exe"
-            # For macOS, app_name might be enough if it's the process name
-            # For Linux, it's usually the command name
+        app_name_lower = app_name_or_exe.lower()
+        self.logger.info(f"Attempting to close application: '{app_name_or_exe}'")
+
+        # Windows specific process name mapping for common apps
+        # This helps bridge the gap between friendly names and actual process names.
+        windows_process_map = {
+            "calculator": ["calculatorapp.exe", "calculator.exe", "calc.exe"], # Modern UWP, older, launch command
+            "calc": ["calculatorapp.exe", "calculator.exe", "calc.exe"],
+            "microsoft edge": ["msedge.exe"],
+            "edge": ["msedge.exe"],
+            "notepad": ["notepad.exe"],
+            "chrome": ["chrome.exe"],
+            "google chrome": ["chrome.exe"],
+            "firefox": ["firefox.exe"],
+            "mozilla firefox": ["firefox.exe"],
+            "vscode": ["code.exe"],
+            "visual studio code": ["code.exe"],
+            "steam": ["steam.exe", "steamwebhelper.exe"], # steamwebhelper is also common
+            # Add more as needed
+        }
+
+        target_process_names = []
+        if os.name == 'nt':
+            # Use the map first if the friendly name is in it
+            if app_name_lower in windows_process_map:
+                target_process_names.extend(windows_process_map[app_name_lower])
+            else:
+                # Fallback: use the provided name, and with .exe
+                target_process_names.append(app_name_lower)
+                if not app_name_lower.endswith(".exe"):
+                    target_process_names.append(app_name_lower + ".exe")
+        else: # For macOS/Linux
+            # Use the mapped name from self.app_map (which might be 'google-chrome' for 'chrome')
+            # or the direct app_name_or_exe if not in map.
+            mapped_exe = self.app_map.get(app_name_lower, app_name_lower)
+            target_process_names.append(mapped_exe)
+            # On Linux/macOS, .app is not a process name directly, but the executable inside is.
+            # For simplicity, we're relying on the main executable name.
+            if mapped_exe.endswith(".app") and sys.platform == "darwin": # e.g. Safari.app
+                target_process_names.append(mapped_exe.replace(".app", "")) # Try "Safari"
+
+        self.logger.debug(f"Target process names for closing '{app_name_or_exe}': {target_process_names}")
 
         closed_any = False
-        for proc in psutil.process_iter(['pid', 'name']):
+        terminated_pids = set()
+
+        for proc in psutil.process_iter(['pid', 'name', 'exe']):
             try:
-                # Be careful with matching, process names can be tricky
-                if exe_name.lower() in proc.info['name'].lower():
-                    print(f"Found process {proc.info['name']} (PID: {proc.info['pid']}) matching '{exe_name}'. Terminating...")
-                    p = psutil.Process(proc.info['pid'])
-                    p.terminate() # Graceful termination
-                    # p.kill() # Forceful termination if terminate fails
-                    closed_any = True
+                proc_name_lower = proc.info['name'].lower()
+                proc_exe_lower = ""
+                if proc.info['exe']: # proc.exe() can require higher privileges or fail
+                    proc_exe_lower = os.path.basename(proc.info['exe']).lower()
+
+                for target_name in target_process_names:
+                    target_name_lower = target_name.lower()
+                    # Match if process name is exactly the target OR
+                    # if process executable basename is exactly the target.
+                    # Using '==' for exact match is safer than 'in' to avoid partial matches.
+                    if proc_name_lower == target_name_lower or \
+                       (proc_exe_lower and proc_exe_lower == target_name_lower):
+
+                        if proc.info['pid'] in terminated_pids: # Already terminated
+                            continue
+
+                        self.logger.info(f"Found process '{proc.info['name']}' (PID: {proc.info['pid']}, EXE: {proc.info['exe']}) matching target '{target_name}'. Terminating...")
+                        p = psutil.Process(proc.info['pid'])
+                        p.terminate() # Graceful termination
+                        terminated_pids.add(proc.info['pid'])
+                        closed_any = True
+                        # Found a match for this target_name, break from inner loop for this proc
+                        # To avoid trying to kill the same process multiple times if it matches multiple targets (unlikely here)
+                        break
+
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass # Process might have already exited or access is denied
+                self.logger.debug(f"Process PID {proc.info.get('pid', 'N/A')} likely already exited or access denied.")
             except Exception as e:
-                print(f"Error while trying to close {exe_name}: {e}")
+                self.logger.error(f"Error while processing/terminating PID {proc.info.get('pid', 'N/A')} for app '{app_name_or_exe}': {e}")
 
         if closed_any:
-            print(f"Attempted to close application(s) matching '{exe_name}'.")
+            self.logger.info(f"Attempted to close application(s) matching '{app_name_or_exe}'.")
+            # It might be good to wait a moment and check if processes actually closed
+            # For now, we assume terminate() initiates the process.
         else:
-            print(f"No running application found matching '{exe_name}' to close.")
+            self.logger.warning(f"No running application found matching any of {target_process_names} to close for input '{app_name_or_exe}'.")
         return closed_any
 
 if __name__ == '__main__':
