@@ -205,8 +205,161 @@ def handle_os_interaction(os_agent: OSInteraction, intent: str, entities: dict) 
     return response_message
 
 
+def process_command_text(text_command: str, parser: CommandParser, os_agent: OSInteraction,
+                         app_agent: AppManager, media_agent: MediaController, web_agent: WebAutomator) -> str:
+    """
+    Processes a text command and returns a response string.
+    This function encapsulates the core command processing logic
+    and can be used by different interfaces (CLI, Web).
+    """
+    logger.info(f"Processing command: {text_command}")
+
+    if "exit jarvis" in text_command.lower() or "quit jarvis" in text_command.lower():
+        logger.info("Exit command recognized.")
+        return "Goodbye!"
+
+    # Get parsed command/action from LLM
+    parsed_action = parser.parse_command(text_command)
+    logger.info(f"LLM parsed action: {parsed_action}")
+
+    intent = parsed_action.get("intent", "unknown")
+    entities = parsed_action.get("entities", {})
+    response_message = ""
+
+    if intent == "exit": # LLM might also return a structured "exit" intent
+        logger.info("Exit intent recognized by LLM.")
+        return "Goodbye!"
+
+    # OS Interaction Intents
+    elif intent in [
+        "create_file", "create_directory", "delete_path",
+        "move_path", "list_directory_contents", "execute_command",
+        "set_brightness", "set_volume"
+    ]:
+        response_message = handle_os_interaction(os_agent, intent, entities)
+
+    # App Interaction Intents
+    elif intent == "open_app":
+        app_name = entities.get("app_name")
+        if app_name:
+            if app_agent.open_app(app_name):
+                response_message = f"Opening {app_name}."
+            else:
+                # Provide more detailed feedback, similar to original main_loop
+                if os.name == 'nt' and app_name.lower() == "microsoft store":
+                    response_message = "Opening the Microsoft Store programmatically is complex. You might need to open it manually or set up a custom shortcut in USER_APP_PATHS in config.py."
+                else:
+                    response_message = (
+                        f"Sorry, I couldn't open '{app_name}'. "
+                        "Ensure it's installed and the name is correct. "
+                        "For non-standard apps, add its path/command to USER_APP_PATHS in config.py."
+                    )
+        else:
+            response_message = "Which application would you like to open?"
+    elif intent == "close_app":
+        app_name = entities.get("app_name")
+        if app_name:
+            if app_agent.close_app(app_name):
+                response_message = f"Attempting to close {app_name}."
+            else:
+                response_message = f"Sorry, I couldn't close {app_name} or it wasn't running."
+        else:
+            response_message = "Which application would you like to close?"
+
+    # Web Interaction Intents
+    elif intent == "open_website":
+        url = entities.get("url")
+        if url:
+            if web_agent.open_website(url):
+                response_message = f"Opening {url}."
+            else:
+                response_message = f"Sorry, I couldn't open {url}."
+        else:
+            response_message = "Which website would you like to open?"
+    elif intent == "search_info":
+        query = entities.get("query")
+        summarize = entities.get("summarize", False)
+        if query:
+            search_result = web_agent.search_info(query, summarize)
+            if summarize:
+                response_message = f"Here's what I found about {query}: {search_result}"
+            else:
+                response_message = f"I've opened a browser tab with search results for {query}."
+        else:
+            response_message = "What would you like me to search for?"
+
+    # Media Control Intents
+    elif intent == "media_play":
+        player_name = entities.get("player_name", "default")
+        track_or_playlist = entities.get("track_or_playlist")
+        success, msg = media_agent.play(player_name, track_or_playlist)
+        response_message = msg
+    elif intent == "media_pause":
+        player_name = entities.get("player_name", "default")
+        success, msg = media_agent.pause(player_name)
+        response_message = msg
+    elif intent == "media_skip":
+        player_name = entities.get("player_name", "default")
+        success, msg = media_agent.skip_track(player_name)
+        response_message = msg
+    elif intent == "media_previous":
+        player_name = entities.get("player_name", "default")
+        success, msg = media_agent.previous_track(player_name)
+        response_message = msg
+
+    # General Query / Summarization
+    elif intent == "general_query":
+        query_text = entities.get("query_text", text_command)
+        query_text_lower = query_text.lower()
+        if "which apps can you open" in query_text_lower or "what apps can you open" in query_text_lower:
+            known_apps = list(app_agent.app_map.keys()) # Assuming app_agent is accessible
+            response_message = (
+                "I can try to open applications I know by default, like Notepad, Calculator, Chrome, Firefox, and a generic 'browser'. "
+                f"Currently, my full list of recognized app names includes: {', '.join(known_apps)}. "
+                "You can also teach me new ones by adding their full path to USER_APP_PATHS in the config.py file. "
+                "What app would you like to open?"
+            )
+        elif "can you speak" in query_text_lower and "hebrew" in query_text_lower:
+             response_message = "I understand commands in English, and my responses are currently in English. Support for speaking other languages like Hebrew is not yet implemented."
+        else:
+            response_message = f"Regarding your query: {query_text}... I'm still learning to handle general conversation."
+
+    elif intent == "summarize_text":
+        filepath = entities.get("filepath")
+        source_url = entities.get("source_url")
+        text_to_summarize_content = entities.get("text_to_summarize") # Renamed from text_to_summarize to avoid conflict
+
+        if filepath:
+            if not os.path.isabs(filepath):
+                filepath = os.path.expanduser(os.path.join("~", filepath))
+            success_read, content_or_error = os_agent.read_file_content(filepath)
+            if success_read:
+                snippet = content_or_error[:500]
+                response_message = f"Here's the beginning of the file '{os.path.basename(filepath)}':\n{snippet}"
+                if len(content_or_error) > 500:
+                    response_message += "\n\n(The file is longer, I've read the first part.)"
+            else:
+                response_message = content_or_error
+        elif source_url:
+            response_message = f"I would summarize {source_url}, but web page summarization needs to be fully connected."
+        elif text_to_summarize_content:
+            response_message = "I would summarize the text you provided, but text summarization needs to be fully connected."
+        else:
+            response_message = "I need a file path, a URL, or some text to summarize."
+
+    # Unknown or Unhandled Intents
+    elif intent == "unknown":
+        response_message = "I'm not sure how to handle that command. Could you try rephrasing?"
+        if "error" in entities:
+            response_message += f" (Parser error: {entities['error']})"
+    else:
+        response_message = f"I understood the intent as '{intent}', but I don't know how to do that yet."
+
+    return response_message
+
+
 def main_loop():
-    logger.info("J.A.R.V.I.S. Assistant Initializing...")
+    logger.info("J.A.R.V.I.S. Assistant Initializing for CLI mode...")
 
     if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_GEMINI_API_KEY":
         logger.error("Gemini API key not configured. Please set it in jarvis_assistant/config.py and restart.")
@@ -216,258 +369,91 @@ def main_loop():
     try:
         recognizer = SpeechRecognizer()
         tts = TextToSpeech()
+        # Initialize components needed for process_command_text
         parser = CommandParser()
         os_agent = OSInteraction()
         app_agent = AppManager()
         media_agent = MediaController()
-        web_agent = WebAutomator() # Initialize WebAutomator
-        logger.info("Core components initialized.")
+        web_agent = WebAutomator()
+        logger.info("Core components initialized for CLI mode.")
         tts.speak("J.A.R.V.I.S. online and ready.")
-    except ValueError as ve:
-        logger.error(f"Initialization error: {ve}")
+    except ValueError as ve: # Catch specific init errors if any
+        logger.error(f"Initialization error: {ve}", exc_info=True)
         print(f"Initialization error: {ve}")
         return
-    except Exception as e:
-        logger.error(f"Unexpected error during initialization: {e}")
+    except Exception as e: # Catch any other unexpected errors during init
+        logger.error(f"Unexpected error during initialization: {e}", exc_info=True)
         print(f"Unexpected error during initialization: {e}")
         return
 
     try:
         while True:
             logger.info("Starting new listening cycle.")
-            # Default to voice input. Text input can be a fallback or configurable option.
-            # For now, we'll set it directly to "voice".
-            # A more advanced setup might use a config variable from config.py
-            # command_input_method = "voice" # Defaulting to voice
-
             command_input_method = ""
-            user_command_after_choice = None # To store any extraneous input after 's' or 't'
+            user_command_after_choice = None
             while command_input_method not in ['s', 't']:
                 try:
-                    # Prompting in the console, not via TTS, as this is a pre-command setup
                     raw_input_str = input("Choose input method: Speak (s) or Type (t), then press Enter: ").strip()
-                    if not raw_input_str: # Empty input
+                    if not raw_input_str:
                         print("No input received. Please enter 's' or 't'.")
                         continue
-
                     choice_char = raw_input_str[0].lower()
-
                     if choice_char in ['s', 't']:
                         command_input_method = choice_char
-                        # Check if there was more text after the choice, only relevant for 't'
                         if len(raw_input_str) > 1 and command_input_method == 't':
                             user_command_after_choice = raw_input_str[1:].strip()
-                            if not user_command_after_choice: # e.g. user typed "t "
-                                user_command_after_choice = None
+                            if not user_command_after_choice: user_command_after_choice = None
                     else:
                         print("Invalid choice. Please enter 's' or 't'.")
                 except EOFError:
                     logger.info("EOF received during input mode selection, treating as exit.")
-                    tts.speak("Exiting.")
-                    return # Exit main_loop
-                except IndexError: # Catch if input was empty after strip
+                    if 'tts' in locals(): tts.speak("Exiting.")
+                    return
+                except IndexError:
                      print("No input received. Please enter 's' or 't'.")
 
-
             text_command = None
-            if command_input_method == "s": # Speech input
+            if command_input_method == "s":
                 logger.info("Listening for voice command...")
-                tts.speak("Listening...")
-                text_command = recognizer.listen()
+                if 'tts' in locals(): tts.speak("Listening...")
+                text_command = recognizer.listen() if 'recognizer' in locals() else None
                 if text_command:
                     logger.info(f"Voice command received: {text_command}")
                 else:
                     logger.info("No voice command detected or error in recognition.")
-                    tts.speak("I didn't catch that. Please try again.")
-                    continue # Skip processing if no command heard
-            else: # Text input mode (command_input_method == "t")
+                    if 'tts' in locals(): tts.speak("I didn't catch that. Please try again.")
+                    continue
+            else: # command_input_method == "t"
                 if user_command_after_choice:
                     text_command = user_command_after_choice
                     logger.info(f"Using command from initial choice: {text_command}")
                 else:
                     try:
-                        text_command = input("הקלד פקודה: ") # "Type command: " in Hebrew as per user log
+                        text_command = input("הקלד פקודה: ") # "Type command: "
                     except EOFError:
                         logger.info("EOF received, treating as exit command.")
-                        text_command = "exit jarvis" # Or handle exit more directly
+                        text_command = "exit jarvis"
                     except KeyboardInterrupt:
                         logger.info("Keyboard interrupt during text input, treating as exit.")
-                        tts.speak("Exiting.")
-                        return # Exit main_loop
+                        if 'tts' in locals(): tts.speak("Exiting.")
+                        return
 
-            if text_command: # Proceed only if a command was actually received
-                logger.info(f"Recognized command: {text_command}")
-                tts.speak(f"Processing: {text_command}")
+            if text_command:
+                if 'tts' in locals(): tts.speak(f"Processing: {text_command}")
 
-                if "exit jarvis" in text_command or "quit jarvis" in text_command:
-                    logger.info("Exit command received. Shutting down.")
-                    tts.speak("Goodbye!")
+                response_message = process_command_text(text_command, parser, os_agent, app_agent, media_agent, web_agent)
+
+                if response_message == "Goodbye!": # Specific string indicating exit
+                    logger.info("Exit command processed. Shutting down CLI mode.")
+                    if 'tts' in locals(): tts.speak(response_message)
                     break
-
-                # Get parsed command/action from LLM
-                parsed_action = parser.parse_command(text_command)
-                logger.info(f"LLM parsed action: {parsed_action}")
-
-                intent = parsed_action.get("intent", "unknown")
-                entities = parsed_action.get("entities", {})
-
-                response_message = ""
-
-                if intent == "exit":
-                    logger.info("Exit intent recognized by LLM. Shutting down.")
-                    response_message = "Goodbye!"
-                    tts.speak(response_message)
-                    break
-
-                # OS Interaction Intents
-                elif intent in [
-                    "create_file", "create_directory", "delete_path", # Updated create_text_file to create_file
-                    "move_path", "list_directory_contents", "execute_command",
-                    "set_brightness", "set_volume"
-                ]:
-                    response_message = handle_os_interaction(os_agent, intent, entities)
-
-                # Placeholder for other intent categories (App, Web, Media)
-                elif intent == "open_app":
-                    app_name = entities.get("app_name")
-                    if app_name:
-                        if app_agent.open_app(app_name):
-                            response_message = f"Opening {app_name}."
-                        else:
-                            if os.name == 'nt':
-                                if app_name.lower() == "microsoft store":
-                                    response_message = "Opening the Microsoft Store programmatically is complex. You might need to open it manually or set up a custom shortcut in USER_APP_PATHS in config.py."
-                                else:
-                                    response_message = (
-                                        f"Sorry, I couldn't open '{app_name}'. "
-                                        "Please ensure it's installed and the name is correct. "
-                                        "If it's a Microsoft Store app or in a non-standard location, "
-                                        "you may need to add its specific launch command or full path "
-                                        "to USER_APP_PATHS in the jarvis_assistant/config.py file. "
-                                        "For Store apps, this might involve an 'explorer.exe shell:AppsFolder\\...' command."
-                                    )
-                            else: # Non-Windows OS
-                                response_message = (
-                                    f"Sorry, I couldn't open '{app_name}'. "
-                                    "Please ensure it's installed and the name is correct, or add its path "
-                                    "to USER_APP_PATHS in the config.py file."
-                                )
-                    else:
-                        response_message = "Which application would you like to open?"
-                elif intent == "close_app":
-                    app_name = entities.get("app_name")
-                    if app_name:
-                        if app_agent.close_app(app_name):
-                            response_message = f"Attempting to close {app_name}."
-                        else:
-                            response_message = f"Sorry, I couldn't close {app_name} or it wasn't running."
-                    else:
-                        response_message = "Which application would you like to close?"
-                elif intent == "open_website":
-                    url = entities.get("url")
-                    if url:
-                        if web_agent.open_website(url):
-                            response_message = f"Opening {url}."
-                        else:
-                            response_message = f"Sorry, I couldn't open {url}."
-                    else:
-                        response_message = "Which website would you like to open?"
-                elif intent == "search_info":
-                    query = entities.get("query")
-                    summarize = entities.get("summarize", False) # Default to False
-                    if query:
-                        search_result = web_agent.search_info(query, summarize)
-                        if summarize:
-                            response_message = f"Here's what I found about {query}: {search_result}"
-                        else:
-                            response_message = f"I've opened a browser tab with search results for {query}."
-                            # search_result here is the URL, could also say "You can find it at {search_result}"
-                    else:
-                        response_message = "What would you like me to search for?"
-                elif intent == "media_play":
-                    player_name = entities.get("player_name", "default")
-                    track_or_playlist = entities.get("track_or_playlist")
-                    success, msg = media_agent.play(player_name, track_or_playlist)
-                    response_message = msg
-                elif intent == "media_pause":
-                    player_name = entities.get("player_name", "default")
-                    success, msg = media_agent.pause(player_name)
-                    response_message = msg
-                elif intent == "media_skip":
-                    player_name = entities.get("player_name", "default")
-                    success, msg = media_agent.skip_track(player_name)
-                    response_message = msg
-                elif intent == "media_previous":
-                    player_name = entities.get("player_name", "default")
-                    success, msg = media_agent.previous_track(player_name)
-                    response_message = msg
-                elif intent == "general_query":
-                    # For general queries, we might just pass the query text back to the LLM
-                    # or handle simple ones like "what time is it?" directly.
-                    # For now, just echo what the LLM might say or a generic response.
-                    query_text = entities.get("query_text", text_command)
-                    # This could be another LLM call for a conversational response
-                    query_text_lower = query_text.lower()
-                    if "which apps can you open" in query_text_lower or "what apps can you open" in query_text_lower:
-                        known_apps = list(app_agent.app_map.keys())
-                        response_message = (
-                            "I can try to open applications I know by default, like Notepad, Calculator, Chrome, Firefox, and a generic 'browser'. "
-                            f"Currently, my full list of recognized app names includes: {', '.join(known_apps)}. "
-                            "You can also teach me new ones by adding their full path to USER_APP_PATHS in the config.py file. "
-                            "What app would you like to open?"
-                        )
-                    elif "can you speak" in query_text_lower and "hebrew" in query_text_lower:
-                        response_message = "I understand commands in English, and my responses are currently in English. Support for speaking other languages like Hebrew is not yet implemented."
-                    else:
-                        response_message = f"Regarding your query: {query_text}... I'm still learning to handle general conversation."
-                elif intent == "summarize_text":
-                    filepath = entities.get("filepath")
-                    source_url = entities.get("source_url")
-                    text_to_summarize = entities.get("text_to_summarize")
-
-                    if filepath:
-                        # Resolve path relative to home if not absolute
-                        if not os.path.isabs(filepath):
-                            filepath = os.path.expanduser(os.path.join("~", filepath))
-
-                        success_read, content_or_error = os_agent.read_file_content(filepath)
-                        if success_read:
-                            # For now, just present a snippet as "reading"
-                            # TTS might struggle with very long content.
-                            snippet = content_or_error[:500] # Read first 500 chars
-                            response_message = f"Here's the beginning of the file '{os.path.basename(filepath)}':\n{snippet}"
-                            if len(content_or_error) > 500:
-                                response_message += "\n\n(The file is longer, I've read the first part.)"
-                        else:
-                            response_message = content_or_error # This will be the error message from read_file_content
-                    elif source_url:
-                        # This would be where web_agent.summarize_url(source_url) or similar is called
-                        response_message = f"I would summarize {source_url}, but web page summarization needs to be fully connected."
-                        # Placeholder: content = web_agent.fetch_page_content(source_url)
-                        # if content: response_message = web_agent.summarize_text_content(content) else: ...
-                    elif text_to_summarize:
-                        # This would be web_agent.summarize_text_content(text_to_summarize)
-                        response_message = "I would summarize the text you provided, but text summarization needs to be fully connected."
-                    else:
-                        response_message = "I need a file path, a URL, or some text to summarize."
-
-                elif intent == "unknown":
-                    response_message = "I'm not sure how to handle that command. Could you try rephrasing?"
-                    if "error" in entities: # If LLM itself had an issue producing JSON
-                        response_message += f" (Parser error: {entities['error']})"
-                else:
-                    response_message = f"I understood the intent as '{intent}', but I don't know how to do that yet."
 
                 logger.info(f"Response to user: {response_message}")
-                tts.speak(response_message)
-
+                if 'tts' in locals(): tts.speak(response_message)
             else:
-                # logger.info("No command recognized or error in recognition.")
-                # tts.speak("Sorry, I didn't catch that. Could you please repeat?")
-                # No command, or error already logged by recognizer.listen()
+                # Error already logged by recognizer or input handling
                 pass
-
-            time.sleep(0.1) # Small delay to prevent tight looping if mic issues
+            time.sleep(0.1)
 
     except KeyboardInterrupt:
         logger.info("User interrupted the main loop. Shutting down.")

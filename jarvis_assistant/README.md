@@ -53,9 +53,29 @@ This project is an advanced AI-powered computer control system, designed to func
 
 ## Running the Assistant
 
-```bash
-python jarvis_assistant/main.py
-```
+J.A.R.V.I.S. can be run in two modes:
+
+1.  **Command-Line Interface (CLI):**
+    *   This mode supports voice and text input directly in your terminal.
+    *   To run:
+        ```bash
+        python jarvis_assistant/main.py
+        ```
+    *   You will be prompted to choose between speak (s) or type (t) input methods.
+
+2.  **Web Interface (Recommended for GUI experience):**
+    *   This mode provides a chat-like graphical user interface in your web browser.
+    *   Ensure Flask is installed (it's in `requirements.txt`).
+    *   To run the web server:
+        ```bash
+        python jarvis_assistant/web_server.py
+        ```
+    *   Once the server is running (you'll see messages in the console including `J.A.R.V.I.S. web interface will be available at http://127.0.0.1:5000/`), open your web browser and navigate to:
+        `http://127.0.0.1:5000/`
+    *   You can then type your commands into the input field and see responses in the chat window.
+    *   To stop the web server, go back to your terminal and press `CTRL+C`.
+
+*Note: Both modes use the same underlying command processing engine and require the Gemini API key to be configured.*
 
 ## Security Note on Sensitive Data
 
@@ -64,8 +84,11 @@ python jarvis_assistant/main.py
 
 ## Modules Overview
 
-*   `main.py`: Main application entry point.
+*   `main.py`: Main application entry point for the Command-Line Interface (CLI).
+*   `web_server.py`: Flask web server that provides a web-based UI for J.A.R.V.I.S.
 *   `config.py`: Configuration like API keys.
+*   `templates/index.html`: HTML template for the web UI.
+*   `static/`: Contains CSS and JavaScript for the web UI.
 *   `core/`: Core components:
     *   `command_parser.py`: LLM integration for understanding commands.
     *   `speech_recognizer.py`: Voice input handling.

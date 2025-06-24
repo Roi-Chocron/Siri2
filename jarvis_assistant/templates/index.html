@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-G">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>J.A.R.V.I.S. Assistant</h1>
+    </header>
+    <main>
+        <div id="responseContainer">
+            <!-- Messages will be appended here by JavaScript -->
+        </div>
+    </main>
+    <footer>
+        <div id="inputContainer">
+            <input type="text" id="commandInput" placeholder="Type your command..." autofocus>
+            <button id="sendCommandButton">Send</button>
+            <!-- Future: <button id="voiceInputButton" title="Send voice command">🎤</button> -->
+        </div>
+    </footer>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
