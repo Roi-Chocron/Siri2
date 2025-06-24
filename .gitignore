@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+venv/
+.venv/
+env/
+.env/
+instance/
+*.log
+logs/
+.pytest_cache/
+.coverage
+.hypothesis/
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OAuth client secrets
+client_secret.json
+credentials.json
+google_credentials.json
+tokens.json # Common name for stored tokens, might use this pattern
+
+# Sensitive config
+*.key
+*.pem
+
+# OS specific
+.DS_Store
+Thumbs.db
