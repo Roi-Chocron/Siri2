@@ -105,25 +105,71 @@ class AppManager:
                           os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")]
             local_app_data = os.environ.get("LocalAppData", "")
 
-            # Common patterns: ProgFiles\AppName\AppName.exe or ProgFiles\Vendor\AppName\AppName.exe
-            # Check for app_name as a directory containing app_name.exe
-            for base_path in prog_files:
-                path_to_check = os.path.join(base_path, app_name, app_name + ".exe")
-                if os.path.exists(path_to_check):
-                    self.logger.debug(f"Found in common Windows path: {path_to_check}")
-                    return path_to_check
+            # Search in Program Files, Program Files (x86)
+            search_paths = [os.environ.get("ProgramFiles", "C:\\Program Files"),
+                            os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")]
+            if local_app_data: # Add LocalAppData\Programs to search paths
+                search_paths.append(os.path.join(local_app_data, "Programs"))
 
-            # Check common vendor folders (e.g., Google for Chrome) - this is very heuristic
-            # A more robust way would be to check Windows Registry for installed apps, which is complex.
-            # Example: os.path.join(prog_files[0], "Google", "Chrome", "Application", "chrome.exe")
+            possible_exe_names = [app_name + ".exe", app_name_lower + ".exe"]
+            # If app_name is an alias in default_app_map, also try its mapped exe name
+            # e.g. if app_name is "Firefox", default_app_map might map it to "firefox.exe"
+            if app_name_lower in self.default_app_map and self.default_app_map[app_name_lower] not in possible_exe_names:
+                possible_exe_names.append(self.default_app_map[app_name_lower])
 
-            if local_app_data:
-                path_to_check = os.path.join(local_app_data, "Programs", app_name, app_name + ".exe")
-                if os.path.exists(path_to_check):
-                     self.logger.debug(f"Found in LocalAppData: {path_to_check}")
-                     return path_to_check
+            # Also consider if app_name itself is a common exe name but without .exe
+            if not app_name_lower.endswith(".exe") and app_name_lower not in [name.replace(".exe","") for name in possible_exe_names]:
+                 possible_exe_names.append(app_name_lower + ".exe")
 
-            # Placeholder: Search for apps installed via Microsoft Store (very complex, involves PowerShell or registry)
+
+            for base_dir in search_paths:
+                if not base_dir or not os.path.isdir(base_dir):
+                    continue
+
+                # Scenario 1: base_dir\app_name\some_exe.exe (e.g. C:\Program Files\Mozilla Firefox\firefox.exe)
+                # User might say "open firefox" or "open Mozilla Firefox"
+                # We should check for a directory named app_name or variations.
+                app_dir_variations = [app_name, app_name.title()]
+                if app_name_lower in self.default_app_map: # e.g. "firefox" maps to "firefox.exe"
+                    # if app_name is "Firefox", its entry in default_app_map might be "firefox" (the exe)
+                    # or it might be a variation like "Mozilla Firefox".
+                    # This part is tricky. For now, let's focus on the app_name as a directory.
+                    pass
+
+
+                for app_folder_name in os.listdir(base_dir):
+                    # Check if app_name (or part of it) is in the folder name for broader matching
+                    # e.g., app_name "Firefox" should match folder "Mozilla Firefox"
+                    if app_name.lower() in app_folder_name.lower():
+                        potential_app_dir = os.path.join(base_dir, app_folder_name)
+                        if os.path.isdir(potential_app_dir):
+                            self.logger.debug(f"Searching in potential app directory: {potential_app_dir}")
+                            # Look for common executable names within this directory
+                            for item in os.listdir(potential_app_dir):
+                                for exe_name_candidate in possible_exe_names:
+                                    if item.lower() == exe_name_candidate.lower():
+                                        found_path = os.path.join(potential_app_dir, item)
+                                        self.logger.info(f"Found executable '{item}' in '{potential_app_dir}' for app '{app_name}'")
+                                        return found_path
+                                # Also look for executables that simply contain the app_name (e.g. EADesktop.exe for EA)
+                                if app_name_lower in item.lower() and item.lower().endswith(".exe"):
+                                    found_path = os.path.join(potential_app_dir, item)
+                                    self.logger.info(f"Found related executable '{item}' in '{potential_app_dir}' for app '{app_name}'")
+                                    return found_path
+
+                            # If no direct match, try common subfolders like 'bin' or the app_folder_name again
+                            for sub_folder_name in [app_folder_name, "bin", "App"]: # Common sub-dir names
+                                potential_sub_app_dir = os.path.join(potential_app_dir, sub_folder_name)
+                                if os.path.isdir(potential_sub_app_dir):
+                                    for item in os.listdir(potential_sub_app_dir):
+                                         for exe_name_candidate in possible_exe_names:
+                                            if item.lower() == exe_name_candidate.lower():
+                                                found_path = os.path.join(potential_sub_app_dir, item)
+                                                self.logger.info(f"Found executable '{item}' in sub-directory '{potential_sub_app_dir}' for app '{app_name}'")
+                                                return found_path
+
+
+            # Placeholder: Search for apps installed via Microsoft Store (very complex)
             # self.logger.debug("Windows Store app path finding not yet implemented.")
 
         elif os.name == 'posix': # macOS or Linux

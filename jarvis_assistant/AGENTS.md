@@ -44,7 +44,14 @@ The project is organized into the following main directories:
 
 ## Specific Module Notes
 
-*   **`AppManager`**: Finding application paths can be tricky. The current `_find_app_path` is a basic attempt. It might need user configuration for non-standard app locations.
+*   **`AppManager`**:
+    *   Finding application paths automatically is challenging. The `_find_app_path` method uses heuristics including PATH search, common OS-specific directories (e.g., Program Files on Windows, /Applications on macOS), and limited scanning within matched application folders.
+    *   This heuristic approach works for many common desktop applications but has limitations. It will likely **not** automatically discover or correctly launch:
+        *   Applications installed via the Microsoft Store (which require special shell commands).
+        *   Games or applications managed by complex launchers (e.g., Steam, EA App, Epic Games Store) which might need specific launcher commands or AppIDs.
+        *   Applications with highly non-standard installation paths or obscure executable names.
+    *   For reliable launching of problematic applications, users **must** utilize the `USER_APP_PATHS` dictionary in `jarvis_assistant/config.py` to provide explicit aliases and full paths to the executables.
+    *   Future enhancements could involve more advanced OS-specific discovery methods like registry scanning (Windows) or Start Menu parsing.
 *   **`MediaController`**: Direct media player control is highly OS and player-dependent. The current version uses `osascript` for macOS and `playerctl` for Linux (for Spotify) as examples. These are not universally available. Robust media control might require dedicated libraries or APIs (e.g., Spotify Web API).
 *   **`WebAutomator`**:
     *   Web scraping for search summarization is fragile and depends on the search engine's HTML structure. Using an LLM to summarize content from a fetched page would be more robust if the LLM can process full HTML or extracted text.
